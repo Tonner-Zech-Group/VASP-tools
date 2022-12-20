@@ -13,7 +13,6 @@ import pymatgen.io.vasp
 import ase.io
 from pymatgen.io.ase import AseAtomsAdaptor
 from scipy import ndimage
-from pathos.multiprocessing import ProcessingPool as Pool
 import math
 from ase.neighborlist import NeighborList
 from ase.data import covalent_radii,colors
