@@ -1,10 +1,5 @@
-# Discontinued
-
-**Developement continues [here](https://github.com/Tonner-Zech-Group/VASP-tools/tree/main).** 
-
-
 ## VASP-tools
-My collection of tools for pre- and post-processing VASP calculations. Mainly Python and Bash.
+Our collection of tools for pre- and post-processing VASP calculations. Mainly Python and Bash.
 
 ### Dependencies
 Different for each script, but mainly
