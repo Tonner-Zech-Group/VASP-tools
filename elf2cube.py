@@ -5,7 +5,6 @@
 # 2022/04/04
 #
 # You can import the module and then call .main() or use it as a script
-from curses import has_key
 from pymatgen.io.vasp.outputs import Elfcar
 from pymatgen.io.ase import AseAtomsAdaptor
 from ase.io.cube import write_cube
@@ -17,13 +16,14 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
     assert len(inFiles) == len(outFiles), "Number of input and output files must be equal!"
     integrals = []
     spin_integrals = []
-    for iFile,inFile in enumerate(inFiles):
+    for iFile, inFile in enumerate(inFiles):
         if not os.path.isfile(inFile):
             raise ValueError('File {:} does not exist'.format(inFile))
 
-        #if output exists mv to .bak
+        # if output exists mv to .bak
         if os.path.isfile(outFiles[iFile]):
-            if verbose: print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
+            if verbose:
+                print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
             os.rename(outFiles[iFile], outFiles[iFile]+'.bak')
 
         if verbose: print("Reading {}".format(inFile))
@@ -39,7 +39,7 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
             full_data = full_elfcar.data['total'] + full_elfcar.data['diff']
         else:
             full_data = full_elfcar.data['total']
-        
+
         if return_integrals:
             integrals.append(np.sum(np.abs(full_data)))
         if return_spin_integrals:
@@ -62,36 +62,43 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
             origin = np.zeros(3)
             atoms = AseAtomsAdaptor.get_atoms(full_elfcar.structure)
 
-            #write cubes
+            # write cubes
             if spinpol:
                 filename = "{}_up.cube".format(outFiles[iFile])
-                if verbose: print("Writing {}".format(filename))
+                if verbose:
+                    print("Writing {}".format(filename))
                 with open(filename, 'w') as f:
                     write_cube(f, atoms, data=full_elfcar.data['total'], origin=origin)
                 filename = "{}_down.cube".format(outFiles[iFile])
-                if verbose: print("Writing {}".format(filename))
+                if verbose:
+                    print("Writing {}".format(filename))
                 with open(filename, 'w') as f:
                     write_cube(f, atoms, data=full_elfcar.data['diff'], origin=origin)
                 filename = "{}_diff.cube".format(outFiles[iFile])
-                if verbose: print("Writing {}".format(filename))
+                if verbose:
+                    print("Writing {}".format(filename))
                 with open(filename, 'w') as f:
                     write_cube(f, atoms, data=full_elfcar.data['total']-full_elfcar.data['diff'], origin=origin)
             else:
                 filename = "{}.cube".format(outFiles[iFile])
-                if verbose: print("Writing {}".format(filename))
+                if verbose:
+                    print("Writing {}".format(filename))
                 with open(filename, 'w') as f:
                     write_cube(f, atoms, data=full_data, origin=origin)
-                
+
     if return_integrals:
         if len(integrals) == 1:
-            if return_spin_integrals: return integrals[0], spin_integrals[0]
-            else: return integrals[0]
+            if return_spin_integrals:
+                return integrals[0], spin_integrals[0]
+            else:
+                return integrals[0]
         else:
-            if return_spin_integrals: return integrals, spin_integrals
-            else: return integrals
+            if return_spin_integrals:
+                return integrals, spin_integrals
+            else:
+                return integrals
     else:
         return
-
 
 
 if __name__ == "__main__":
