@@ -10,6 +10,7 @@ import argparse, os, subprocess, sys
 import numpy as np
 from matplotlib.ticker import MaxNLocator
 from ase.units import create_units
+from matplotlib import pyplot as plt
 
 
 def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, filename, lw=3, s=0, highlight=None, dispersion=None, unit='kJ/mol'):
