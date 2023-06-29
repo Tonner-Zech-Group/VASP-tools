@@ -18,12 +18,10 @@ Usage as a python module
 -----
 >>> from split_vasp_freq import split, combine
 >>> split('POSCAR', 10) # Split the VASP frequency calculation into parts with 10 atoms each.
->>> vib = combine('POSCAR', return_vibrations=True) # Recombine the results
+>>> vib = combine('POSCAR', return_vibrations=True, sanity_checks=[ function1, function2, ...]) # Recombine the results
 >>> zpe = vib.get_zero_point_energy()
 
 """
-
-
 
 import numpy as np
 from math import ceil
@@ -41,17 +39,20 @@ from typing import Union
 def log(msg, verbose=True):
     if verbose: print(msg)
 
-def read_input_structure(input_file, verbose=True) -> dict:
+def read_input_structure(input_file, verbose=True, use_only_indices=None) -> dict:
     """
     Read the input structure and return atoms, constraints and indices of free atoms.
 
     Parameters
     ----------
     input_file : str
-        Input file with structure, e.g. POSCAR
+        Input file with structure, e.g. POSCAR.
 
     verbose : bool
-        Print some information about the structure
+        Print some information about the structure.
+
+    use_only_indices : list of int
+        List of indices of atoms to be moved. If None, the constraints from the input_file are used. Defaults to None. Can be used to only move a subset of atoms, even if the calculations moved more atoms. Beware to not give indices that were restrained in the original calculation, otherwise building the Vibrations object will fail.
 
     Returns
     -------
@@ -64,6 +65,10 @@ def read_input_structure(input_file, verbose=True) -> dict:
     res['atoms'] = io.read(input_file)
     n_atoms = len(res['atoms'])
     log("Number of atoms: {}".format(n_atoms), verbose=verbose)
+    if use_only_indices:
+        log("Setting new additional constraint based on use_only_indices", verbose=verbose)
+        new_constraint = FixAtoms(np.delete(np.arange(n_atoms), use_only_indices))
+        res['atoms'].set_constraint(new_constraint)
     res['constraints'] = res['atoms'].constraints
     res['indices'] = np.arange(n_atoms)
     res['n_free_atoms'] = n_atoms
@@ -77,7 +82,7 @@ def read_input_structure(input_file, verbose=True) -> dict:
     log("Remaining unconstrained atoms: {}".format(res['n_free_atoms']), verbose=verbose)
     return res
 
-def split(input_file, n_atoms_per_calc, verbose=True) -> None:
+def split(input_file, n_atoms_per_calc, cwd=".", verbose=True) -> None:
     """Split a VASP frequency calculation into individual parts.
     
     Parameters
@@ -87,6 +92,12 @@ def split(input_file, n_atoms_per_calc, verbose=True) -> None:
 
     n_atoms_per_calc : int
         Number of atoms to be moved in each partial calculation
+
+    cwd : str
+        Working directory, defaults to '.'
+
+    verbose : bool
+        Print information to stdout?
     """
     info = read_input_structure(input_file, verbose=verbose)
     log("Number of atoms per calculation: {}".format(n_atoms_per_calc), verbose=verbose)
@@ -95,9 +106,10 @@ def split(input_file, n_atoms_per_calc, verbose=True) -> None:
     log("Will now create {} subfolders with corresponding POSCARs".format(n_calcs), verbose=verbose)
     for i_calc in range(n_calcs):
         folder_name = "freq_{:03d}".format(i_calc+1)
-        if os.path.isdir(folder_name):
-            raise RuntimeError("Folder {} already exists!".format(folder_name))
-        os.mkdir(folder_name)
+        folder_path = os.path.join(cwd, folder_name)
+        if os.path.isdir(folder_path):
+            raise RuntimeError("Folder {} already exists!".format(folder_path))
+        os.mkdir(folder_path)
         tmp_atoms = info['atoms'].copy()
         tmp_constraints = info['constraints'].copy()
         move_indices = info['indices'][i_calc*n_atoms_per_calc:(i_calc+1)*n_atoms_per_calc]
@@ -105,7 +117,7 @@ def split(input_file, n_atoms_per_calc, verbose=True) -> None:
         add_const = FixAtoms(fix_indices)
         tmp_constraints.append(add_const)
         tmp_atoms.set_constraint(tmp_constraints)
-        tmp_atoms.write(os.path.join(folder_name, "POSCAR"))
+        tmp_atoms.write(os.path.join(folder_path, "POSCAR"))
 
 
 def get_nfree_delta(incar_path, verbose=True) -> int:
@@ -137,7 +149,7 @@ def get_nfree_delta(incar_path, verbose=True) -> int:
         raise RuntimeError("Could not find POTIM in INCAR!")
     return n_displacements, delta
 
-def combine(input_file, verbose=True, return_vibrations=False) -> Union[None, Vibrations]:
+def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_checks=[], use_only_indices=None) -> Union[None, Vibrations]:
     """
     Combine the results of a split VASP frequency calculation.
 
@@ -146,19 +158,31 @@ def combine(input_file, verbose=True, return_vibrations=False) -> Union[None, Vi
     Parameters
     ----------
     input_file : str
-        Input file with structure, e.g. POSCAR
+        Input file with structure, e.g. POSCAR (INCAR needs to be in the same folder)
+
+    cwd : str
+        Working directory, defaults to '.'
+
+    verbose : bool
+        Print information to stdout?
     
     return_vibrations : bool
         Return the ASE Vibrations object
+
+    sanity_checks : list of functions
+        List of functions to perform custom sanity checks on all jobs. Each function must take a single argument, which is the path to the folder of the job. It's return value should be True if the job is ok and False otherwise.
+
+    use_only_indices : list of int
+        List of indices of atoms to be moved. If None, the constraints from the input_file are used. Defaults to None. Can be used to only move a subset of atoms, even if the calculations moved more atoms. Beware to not give indices that were restrained in the original calculation, otherwise building the Vibrations object will fail.
 
     Returns
     -------
     None or ase.vibrations.Vibrations object
     """
-    name = "freq"
-    info = read_input_structure(input_file, verbose=verbose)
-    n_free, delta = get_nfree_delta("INCAR", verbose=verbose)
-    dirs = [ d for d in glob.glob("{}_*".format(name)) if os.path.isdir(d) ]
+    name = os.path.join(cwd, "freq")
+    info = read_input_structure(input_file, verbose=verbose, use_only_indices=use_only_indices)
+    n_free, delta = get_nfree_delta(os.path.join(os.path.dirname(input_file), "INCAR"), verbose=verbose)
+    dirs = [ os.path.normpath(d) for d in glob.glob(os.path.join(cwd, "{}_*".format("freq"))) if os.path.isdir(d) ]
     dirs.sort()
     n_calcs = len(dirs)
     log("Found {} subfolders with frequency job parts.".format(n_calcs), verbose=verbose)
@@ -178,6 +202,12 @@ def combine(input_file, verbose=True, return_vibrations=False) -> Union[None, Vi
             log("WARNING: No vasprun.xml found in {}, skipping.".format(dir), verbose=verbose)
             continue
         results[dir]['atoms'] = io.read(os.path.join(dir, "vasprun.xml"), format='vasp-xml', index=slice(0, None))
+        # basic check if job succeeded
+        assert results[dir]['atoms'][0].calc is not None, "Could not read VASP calculation from {}".format(dir)
+        # perform custom sanity checks
+        for func in sanity_checks:
+            log("Running custom sanity check {} on {}".format(func.__name__, dir), verbose=verbose)
+            assert func(dir), "Custom sanity check {} failed for {}".format(func.__name__, dir)
         # in the first round save equilibrium forces otherwise
         # xml has originial structure as first entry, so we need to remove it
         # make sure to always use apply_constraint=False, otherwise ASE sets the forces to zero!
