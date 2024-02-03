@@ -25,14 +25,20 @@ def increment_positions(atoms, mode, factor):
 
 def make_animation(atoms, mode, frames, scale):
     anim = []
-    if frames % 2:
+    anim.append(atoms)  # First image should be original POSCAR
+    frames = frames - 1
+    while frames % 4:   # Ensure the number of frames is divisible by four
         frames += 1
-    for frame in range(int(frames / 2)):
+    for frame in range(int(frames / 4)):
         atoms = increment_positions(atoms, mode, scale)
         anim.append(atoms)
     for frame in range(int(frames / 2)):
         atoms = increment_positions(atoms, mode, -scale)
         anim.append(atoms)
+    for frame in range(int(frames / 4)):
+        atoms = increment_positions(atoms, mode, scale)
+        anim.append(atoms)
+    # Last Frame should be the original POSCAR
     return anim
 
 
@@ -42,10 +48,12 @@ if __name__ == "__main__":
         description='shows a preview of a modecar file in ASE GUI',
         epilog='')
     # Add parser arguments
-    parser.add_argument("-p", "--poscar", type=str, default='POSCAR', help="path to poscar file that corresponds to the modecar file")
+    parser.add_argument("-p", "--poscar", type=str, default='POSCAR',
+                        help="path to poscar file that corresponds to the modecar file")
     parser.add_argument("-m", "--modecar", type=str, default='MODECAR', help="modecar file that should be previewed")
     parser.add_argument("-f", "--frames", type=int, default=60, help="number of frames in the animation")
-    parser.add_argument("-s", "--scale", type=float, default=1, help="factor by which the modecar will be scaled each frame")
+    parser.add_argument("-s", "--scale", type=float, default=1,
+                        help="factor by which the modecar will be scaled each frame")
     args = parser.parse_args()
     mode = read_modecar(args.modecar)
     atoms = ase.io.read(args.poscar)
