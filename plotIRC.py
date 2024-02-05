@@ -7,6 +7,9 @@ import matplotlib as mpl
 import numpy as np
 import ase
 import ase.io
+from ase.units import _Nav as Nav, _e as e
+
+ev_to_kjMol = (Nav * e)/1000
 
 
 def calc_rms(pos1, pos2):
@@ -24,8 +27,7 @@ def read_sp(directory, allow_freq):
             print("Supplied transition state is not a single point calculation")
             exit(1)
         energy = file[0].calc.results["energy"]
-        print("Energy: ", energy)
-        energy *= 96.485
+        energy *= ev_to_kjMol
         positions = file[0].positions
     else:
         print("vasprun.xml file not found")
@@ -51,14 +53,11 @@ def read_irc(directory):
     step_size = []
     for i in range(1, len(steps) - 1):
         step_size.append(steps[i - 1] - steps[i])
-    # print(step_size)
-    # read energies
     energies = []
     for structure in structures:
         energy = structure.calc.results["energy"]
-        energy *= 96.485
+        energy *= ev_to_kjMol
         energies.append(energy)
-    # print(steps, energies)
     return init_structure, steps, energies
 
 
@@ -80,7 +79,8 @@ def generate_plot(irc_e, irc_p, ts):
     product_offset = calc_rms(ts[0], irc_p[0])
     # apply offset to reaction coordinate and ensure the correct direction of the coordinate
     # Product Path
-    print(reactant_offset, product_offset)
+    print(f"Found Reactant ICR calculation to be offset by {reactant_offset} Angstrom")
+    print(f"Found Product ICR calculation to be offset by {product_offset} Angstrom")
     if irc_p[1][0] > irc_p[1][-1]:  # Reaction coordinate in negative direction
         for i in range(len(irc_p[1])):
             irc_p[1][i] = (irc_p[1][i] * (-1)) + product_offset
@@ -112,7 +112,6 @@ def generate_plot(irc_e, irc_p, ts):
     else:
         s_plot_x = [irc_e[1][0], irc_p[1][0]]
         s_plot_y = [irc_e[2][0], irc_p[2][0]]
-    print(s_plot_x, s_plot_y)
     return irc_e[1], irc_e[2], s_plot_x, s_plot_y, irc_p[1], irc_p[2]
 
 

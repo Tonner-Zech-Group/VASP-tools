@@ -4,12 +4,13 @@ import math
 import sys
 from ase.data import atomic_masses
 import ase.io
+from ase.units import _amu as amu, _me as me
 
 
 def get_atomic_mass(element_symbol):
     mass_in_amu = atomic_masses[element_symbol]
     # Convert mass to atomic units (1 amu = 1.66053904e-27 kg)
-    mass_in_au = mass_in_amu * 1.66053904e-27 / 9.10938356e-31
+    mass_in_au = mass_in_amu * amu / me
     return mass_in_au
 
 
