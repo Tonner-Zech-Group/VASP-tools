@@ -6,7 +6,7 @@ Different for each script, but mainly
 - [ASE](https://wiki.fysik.dtu.dk/ase/)
 - [VTST](http://theory.cm.utexas.edu/vtsttools/)
 - [Pymatgen](https://pymatgen.org/)
-- [geodesic interpolation] (https://github.com/virtualzx-nad/geodesic-interpolate)
+- [geodesic_interpolate] (https://github.com/virtualzx-nad/geodesic-interpolate)
 
 ### Pre-Processing
 - freq2mode: generates MODECAR and mass-weighted MODCAR files from frequency calculations
