@@ -17,6 +17,7 @@ from decimal import Decimal
 import ase.io
 from geodesic_interpolate.interpolation import redistribute
 from geodesic_interpolate.geodesic import Geodesic
+from math import floor,ceil
 
 ######## Functions as copied from geodesic_wrapper.py ########
 def ase_geodesic_interpolate(initial_mol,final_mol, n_images = 20, friction = 0.01, dist_cutoff = 3, scaling = 1.7, sweep = None, tol = 0.002, maxiter = 15, microiter = 20):
@@ -65,7 +66,7 @@ def interpolate_traj(initial,final,LEN,method,calculator=None):
     images += [final]
     nebts = NEB(images)
     nebts.interpolate(mic=True,method=method,apply_constraint=True)
-    new_traj=Trajectory(f'{LEN}_interpol.traj',mode='w')
+    new_traj=Trajectory(f'{LEN}_{method}_interpol.traj',mode='w')
     for im in images:
         new_traj.write(im)
 def create_trajs(START,END,LEN,method):
@@ -76,14 +77,25 @@ def vprint(words):
     if args.verbose:
         print(words)
 
-
+def create_both(initial_mol, final_mol, LEN, method):
+    create_trajs(initial_mol, final_mol, LEN, method) #create the interpolated trajectory using the idpp/direct method
+    trajectory_pbc=read(f'{LEN}_{method}_interpol.traj',index=':') #read the interpolated trajectory
+    vprint(f"Interpolated trajectory created with {len(trajectory_pbc)} images using {method} method")
+    trajectory_geodesic = ase_geodesic_interpolate(initial_mol,final_mol, n_images= LEN+1) #create the geodesic interpolated trajectory
+    vprint(f"Geodesic interpolated trajectory created with {len(trajectory_geodesic)} images")
+    difference=initial_mol[0].position-trajectory_geodesic[0][0].position
+    for image in trajectory_geodesic: #fix the the position of the shifted molecule since the geodesic interpolation does not use pbc
+        image.set_cell(initial_mol.cell)
+        for at in image:
+            at.position=at.position+difference
+    trajectory_geodesic.append(final_mol)
+    return(trajectory_pbc, trajectory_geodesic)
 ######### Combination ######### @FThiemann
 
 
 
 def main():
     import argparse
-
     parser = argparse.ArgumentParser(description='Interpolate Mixing the geodesic and idpp/direct interpolation methods.')
     parser.add_argument('start', type=str, help='POSCAR file of initial molecule')
     parser.add_argument('end', type=str, help='POSCAR file of final molecule')
@@ -93,6 +105,7 @@ def main():
     parser.add_argument('-c','--check', action='store_true', help='Check the cutoff trajectory')
     parser.add_argument('-s','--show', action='store_true', help='view trajectory')
     parser.add_argument('-v','--verbose', action='store_true', help='verbosity of output')
+    parser.add_argument('-i','--intermediate',help='Use a guess for the transition state, will be interpolated from start to I and from I to end')
     global args
     args = parser.parse_args()
 
@@ -102,18 +115,19 @@ def main():
     moleculeStart = -1 * args.SurfaceCutoff
     method = args.method
 
-    create_trajs(initial_mol, final_mol, LEN, method) #create the interpolated trajectory using the idpp/direct method
-    trajectory_pbc=read(f'{LEN}_interpol.traj',index=':') #read the interpolated trajectory
-    vprint(f"Interpolated trajectory created with {len(trajectory_pbc)} images using {method} method")
-    trajectory_geodesic = ase_geodesic_interpolate(initial_mol,final_mol, n_images= LEN+1) #create the geodesic interpolated trajectory
-    vprint(f"Geodesic interpolated trajectory created with {len(trajectory_geodesic)} images")
-    difference=initial_mol[0].position-trajectory_geodesic[0][0].position 
-    for image in trajectory_geodesic: #fix the the position of the shifted molecule since the geodesic interpolation does not use pbc
-        image.set_cell(initial_mol.cell)
-        for at in image:
-            at.position=at.position+difference 
+    if args.intermediate:
+        vprint(f"using intermediate. first segment: {floor(LEN/2)}, second {ceil(LEN/2)} ")
+        I = read(args.intermediate)
+        trajectory_pbc1, trajectory_geodesic1 = create_both(initial_mol, I, floor((LEN)/2)-1, method)
+        trajectory_pbc2, trajectory_geodesic2 = create_both(I , final_mol, ceil((LEN)/2)-1, method)
+        trajectory_pbc = trajectory_pbc1.copy()
+        trajectory_pbc += trajectory_pbc2
+        trajectory_geodesic = trajectory_geodesic1.copy()
+        trajectory_geodesic += trajectory_geodesic2
+        vprint(f"total length of geodesic: {len(trajectory_geodesic)}; pbc: {len(trajectory_pbc)}")
+    else:
+        trajectory_pbc, trajectory_geodesic = create_both(initial_mol, final_mol, LEN, method)
     newTrajectory = trajectory_pbc.copy()
-    trajectory_geodesic.append(final_mol)
     new_traj=Trajectory(f'{LEN}_interpol.traj',mode='w')
     for nr, image in enumerate(trajectory_pbc):
         atoms_idpp = trajectory_pbc[nr]
