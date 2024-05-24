@@ -20,3 +20,4 @@ Different for each script, but mainly
 - visualize-magnetization.sh: Creates a VMD visualisation state file for the magnetization denisty by splitting the CHGCAR (by running chgsplit.pl), converting it to a cube file (by running chgcar2cube.sh) and then creating representations for VMD.
 - viewMode.py: Shows a graphical preview of a MODECAR file using ase gui
 - plotIRC: Tool that creates a plot of VASP IRC calculations in both direction and is compatible with shifts in the starting structure.
+- replace_potcar_symlinks.sh: Searches for POTCARS in subdirs and replaces them with symlinks. CAREFUL!
