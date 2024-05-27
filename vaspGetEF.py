@@ -139,7 +139,7 @@ def process_all_xmls(path, verbose=False, write_json=False) -> Dict[str, List[fl
     return combined
 
 
-def plot_fe(combined, filename, lw=2) -> None:
+def plot_fe(combined, filename, lw=2, show=False) -> None:
     """Plot the forces and energies."""
     nItems = len(combined['force'])
     xAxis = list(range(1, nItems+1))
@@ -160,7 +160,8 @@ def plot_fe(combined, filename, lw=2) -> None:
     ax2.plot(xAxis, combined['force'], color=color, ls='-', lw=lw)
     plt.tight_layout()
     plt.savefig(filename)
-    #plt.show()
+    if show:
+        plt.show()
     plt.close()
 
 
