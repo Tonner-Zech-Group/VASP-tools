@@ -1,17 +1,32 @@
-## VASP-tools
+# VASP-tools
+
 Our collection of tools for pre- and post-processing VASP calculations. Mainly Python and Bash.
 
-### Dependencies
+## Installation
+
+Clone this repository and run `pip install .` inside the main directory. If you want to always use the latest content of the repo you can use the 'developement' install of pip by running `pip install -e .`. Just doing `git pull` to get the latest content of the repo will then automatically result in the usage of the latest code without need to reinstall.
+
+You can also use the latest release by installing it from PyPi:
+
+```bash
+pip install orcatools
+```
+
+## Dependencies
+
 Different for each script, but mainly
+
 - [ASE](https://wiki.fysik.dtu.dk/ase/)
 - [VTST](http://theory.cm.utexas.edu/vtsttools/)
 - [Pymatgen](https://pymatgen.org/)
 - [Geodesic Interpolation](https://github.com/virtualzx-nad/geodesic-interpolate)
 
-### Pre-Processing
+## Pre-Processing
+
 - freq2mode: generates MODECAR and mass-weighted MODCAR files from frequency calculations
 
-### Post-Processing
+## Post-Processing
+
 - chgcar2cube.py: Convert CHGCAR-like files to cube files using Pymatgen and ASE.
 - neb2movie.py: Convert VASP NEB to ASE ext-xyz movie, just like nebmovie.pl of VTST.
 - poscar2nbands.py: Helper to get the NBANDS value for LOBSTER calculations using the current POSCAR, INCAR and POTCAR setup with 'standard' options.
