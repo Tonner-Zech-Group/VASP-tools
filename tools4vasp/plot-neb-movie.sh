@@ -19,7 +19,7 @@ else
    for (( i=0; i<nImages; i++ ))
    do
       echo "animate goto ${i}" >> movie.vmd
-      pi=$(printf "%02d" $i)
+      pi=$(printf "%02d" "$i")
       echo "render Tachyon NEB-${pi}.dat" >> movie.vmd
    done
    echo "quit" >> movie.vmd
@@ -30,7 +30,7 @@ vmd -dispdev text -e movie.vmd
 
 for (( i=0; i<nImages; i++ ))
 do
-   pi=$(printf "%02d" $i)
+   pi=$(printf "%02d" "$i")
    file="NEB-${pi}"
    echo "Rendering $file"
    sed -i 's/Resolution.*/Resolution 7664 4164/' "$file".dat
