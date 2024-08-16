@@ -1,6 +1,6 @@
-ase
-matplotlib==3.8.4
-natsort==8.3.1
-numpy==1.24.3
-pymatgen==2023.5.10
-setuptools==67.7.2
+ase==3.23.0
+matplotlib==3.9.2
+natsort==8.4.0
+numpy==2.0.1
+pymatgen==2024.8.9
+setuptools==72.1.0
