@@ -5,7 +5,7 @@
 from ase.io import read
 from ase import Atoms
 from ase.mep import NEB
-# from ase.calculators.lj import LennardJones as LJ
+from ase.calculators.lj import LennardJones as LJ
 from ase.io import Trajectory
 from ase.visualize import view
 from pathlib import Path
@@ -64,16 +64,16 @@ def interpolate_traj(initial,final,LEN,method,calculator=None):
     for im in images:
         new_traj.write(im)
 def create_trajs(START,END,LEN,method):
-    pass
-    # calc = LJ()
-    # TRAJ=interpolate_traj(START,END,LEN,method,calculator=calc)
+    calc = LJ()
+    TRAJ = interpolate_traj(START,END,LEN,method,calculator=calc)
+    return TRAJ
 
 def vprint(words):
     if args.verbose:
         print(words)
 
 def create_both(initial_mol, final_mol, LEN, method):
-    create_trajs(initial_mol, final_mol, LEN, method) #create the interpolated trajectory using the idpp/direct method
+    _ = create_trajs(initial_mol, final_mol, LEN, method) #create the interpolated trajectory using the idpp/direct method
     trajectory_pbc=read(f'{LEN}_{method}_interpol.traj',index=':') #read the interpolated trajectory
     vprint(f"Interpolated trajectory created with {len(trajectory_pbc)} images using {method} method")
     trajectory_geodesic = ase_geodesic_interpolate(initial_mol,final_mol, n_images= LEN+1) #create the geodesic interpolated trajectory
