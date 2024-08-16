@@ -5,7 +5,7 @@
 from ase.io import read
 from ase import Atoms
 from ase.mep import NEB
-from ase.calculators.lj import LennardJones as LJ
+# from ase.calculators.lj import LennardJones as LJ
 from ase.io import Trajectory
 from ase.visualize import view
 from pathlib import Path
@@ -54,7 +54,7 @@ def interpolate_traj(initial,final,LEN,method,calculator=None):
     interpolated_length=LEN
     initial_1=initial.copy()
     initial_1.calc=calculator #attach calculator to images between start and end
-    RETURN=initial_1.copy()
+    # RETURN=initial_1.copy()
     images = [initial]
     images += [initial_1.copy() for i in range(interpolated_length)] #create LEN instances
     images += [final]
@@ -64,8 +64,9 @@ def interpolate_traj(initial,final,LEN,method,calculator=None):
     for im in images:
         new_traj.write(im)
 def create_trajs(START,END,LEN,method):
-    calc = LJ()
-    TRAJ=interpolate_traj(START,END,LEN,method,calculator=calc)
+    pass
+    # calc = LJ()
+    # TRAJ=interpolate_traj(START,END,LEN,method,calculator=calc)
 
 def vprint(words):
     if args.verbose:
@@ -111,9 +112,9 @@ def main():
 
     if args.intermediate:
         vprint(f"using intermediate. first segment: {floor(LEN/2)}, second {ceil(LEN/2)} ")
-        I = read(args.intermediate)
-        trajectory_pbc1, trajectory_geodesic1 = create_both(initial_mol, I, floor((LEN)/2)-1, method)
-        trajectory_pbc2, trajectory_geodesic2 = create_both(I , final_mol, ceil((LEN)/2)-1, method)
+        in_read = read(args.intermediate)
+        trajectory_pbc1, trajectory_geodesic1 = create_both(initial_mol, in_read, floor((LEN)/2)-1, method)
+        trajectory_pbc2, trajectory_geodesic2 = create_both(in_read , final_mol, ceil((LEN)/2)-1, method)
         trajectory_pbc = trajectory_pbc1.copy()
         trajectory_pbc += trajectory_pbc2
         trajectory_geodesic = trajectory_geodesic1.copy()
