@@ -4,13 +4,43 @@
 # by Patrick Melix
 # 2021/06/15
 #
+from io import TextIOWrapper
 from ase.calculators.vasp.vasp import Vasp
 from ase import io
 import os
 import numpy as np
-from typing import Optional
+from typing import Optional, List
 import subprocess
 
+def _get_elements_from_outcar(f: TextIOWrapper) -> list:
+    """Get elements from OUTCAR file.
+    
+    Input Parameters
+    ----------------
+
+    Returns
+    -------
+    List of element names
+    """
+    lines = []
+    for line in f:
+        if "POSCAR" in line:
+            elements_poscar = line.split(':')[1].strip().split()
+            break
+        elif "POTCAR:" in line:
+            lines.append(line)
+    if len(lines) == 1:
+        elements_potcar = [lines[0].split(':')[-1].strip().split()[1]]
+    else:
+        assert len(lines) % 2 == 0, "POTCAR: lines are not even"
+        elements_potcar = [ line.split(':')[-1].strip().split()[1] for line in lines[0:int(len(lines)/2)] ]
+    # clean up element names by removing _* suffixes for PAW potentials
+    for i in range(len(elements_potcar)):
+        if '_' in elements_potcar[i]:
+            elements_potcar[i] = elements_potcar[i].split('_')[0]
+        if '_' in elements_poscar[i]:
+            elements_poscar[i] = elements_poscar[i].split('_')[0]
+    return elements_poscar, elements_potcar
 
 def check_vasp_potcar_order(path) -> Optional[str]:
     """Check VASP calculations for proper POTCAR order.
@@ -25,21 +55,8 @@ def check_vasp_potcar_order(path) -> Optional[str]:
     None if everything is good or a string with a message if a problem occurs.
     """
     assert os.path.isdir(path), "Given path is not a directory"
-    lines = []
     with open(os.path.join(path, "OUTCAR"), "r") as f:
-        for line in f:
-            if "POSCAR" in line:
-                elements_poscar = line.split(':')[1].strip().split()
-                break
-            elif "POTCAR:" in line:
-                lines.append(line)
-    # assert lines has even length, as there is a list of POTCARs and then each POTCAR info is listed
-    # get element names from OUTCAR file
-    if len(lines) == 1:
-        elements_potcar = [lines[0].split(':')[-1].strip().split()[1]]
-    else:
-        assert len(lines) % 2 == 0, "POTCAR: lines are not even"
-        elements_potcar = [ line.split(':')[-1].strip().split()[1] for line in lines[0:int(len(lines)/2)] ]
+        elements_poscar, elements_potcar = _get_elements_from_outcar(f)
     if elements_poscar != elements_potcar:
         return "POTCAR order does not match POSCAR order"
     else:
