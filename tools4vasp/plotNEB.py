@@ -6,7 +6,9 @@
 #
 # You can import the module and then call .main() or use it as a script
 # Needs grep and tail.
-import argparse, os, subprocess, sys
+import argparse
+import os
+import subprocess
 import numpy as np
 from matplotlib.ticker import MaxNLocator
 from ase.units import create_units
@@ -83,7 +85,6 @@ def main(filename='NEB.png', presentation=False, highlight=None, plot_all=False,
     print("{:} data points found.".format(nImages))
 
     reactionCoord = [ s[1] for s in spline ]
-    xAxis = [ s[0] for s in spline ]
     #images = [ d[0] for d in nebData ]
     reactionCoordImageAxis = [ d[1] for d in nebData ]
     #reactionCoordImageAxis = [ reactionCoord[xAxis.index(n)] for n in images ]

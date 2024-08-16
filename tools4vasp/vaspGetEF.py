@@ -5,7 +5,10 @@ Useful for comparing the convergence of forces and energies in VASP calculations
 """
 
 from natsort import natsorted
-import glob, os, json, sys
+import glob
+import os
+import json
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from ase.io.vasp import read_vasp_xml
@@ -132,7 +135,6 @@ def process_all_xmls(path, verbose=False, write_json=False) -> Dict[str, List[fl
         else:
             combined['force'].extend(d[:,1].tolist())
             combined['energy'].extend(d[:,2].tolist())
-    nItems = len(combined['force'])
     if write_json:
         with open(os.path.join(path,'fe-combined.json'),'w') as f:
             json.dump(combined, f)

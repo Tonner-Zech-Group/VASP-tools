@@ -5,7 +5,8 @@
 #
 # You can import the module and then call .main() or use it as a script
 from ase import io
-import os, glob
+import os
+import glob
 
 def main(outFile='movie.xyz', workdir='.', wrap='False', use=None):
     """

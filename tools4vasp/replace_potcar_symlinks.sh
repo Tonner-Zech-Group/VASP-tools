@@ -15,9 +15,9 @@ fi
 
 
 # find all POTCAR files in all subdirectories
-potcar_files=($(find . -mindepth 2 -type f -name "*POTCAR*"))
-ref_potcar_files=($(find . -mindepth 1 -maxdepth 1 -type f -name "*POTCAR*"))
-ref_md5sums=($(md5sum "${ref_potcar_files[@]}" | cut -d' ' -f1))
+mapfile -t potcar_files < <(find . -mindepth 2 -type f -name "*POTCAR*")
+mapfile -t ref_potcar_files < <(find . -mindepth 1 -maxdepth 1 -type f -name "*POTCAR*")
+mapfile -t ref_md5sums < <(md5sum "${ref_potcar_files[@]}" | cut -d' ' -f1)
 echo "Found the following reference POTCAR files:"
 echo "${ref_potcar_files[@]}"
 echo "With the following md5sums:"

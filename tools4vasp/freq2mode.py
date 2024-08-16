@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import math
-import sys
 from ase.data import atomic_masses
 import ase.io
 from ase.units import _amu as amu, _me as me

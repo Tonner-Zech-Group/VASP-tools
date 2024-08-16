@@ -26,7 +26,8 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
                 print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
             os.rename(outFiles[iFile], outFiles[iFile]+'.bak')
 
-        if verbose: print("Reading {}".format(inFile))
+        if verbose:
+            print("Reading {}".format(inFile))
         full_elfcar = Elfcar.from_file(inFile)
         spinpol = 'diff' in full_elfcar.data.keys()
         #pymatgen: “total” key refers to Spin.up, and “diff” refers to Spin.down.

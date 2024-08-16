@@ -27,17 +27,16 @@ import numpy as np
 from math import ceil
 from ase import io
 from ase.constraints import FixAtoms
-from ase.calculators.vasp import Vasp
 from ase.vibrations.data import VibrationsData
 from ase.vibrations import Vibrations
 from ase.geometry import find_mic
-from ase.calculators.calculator import compare_atoms
-from ase.utils.filecache import MultiFileJSONCache
-import os, glob, json
+import os
+import glob
 from typing import Union
 
 def log(msg, verbose=True):
-    if verbose: print(msg)
+    if verbose:
+        print(msg)
 
 def read_input_structure(input_file, verbose=True, use_only_indices=None) -> dict:
     """
@@ -131,7 +130,7 @@ def get_nfree_delta(incar_path, verbose=True) -> int:
         for line in f:
             if "nfree" in line.lower():
                 n_displacements = int(line.split('=')[1].strip()[0])
-                if not n_displacements in [2, 4]:
+                if n_displacements not in [2, 4]:
                     raise ValueError("NFREE must be 2 or 4, only those are supported by ASE!")
             elif "potim" in line.lower():
                 delta = float(line.split('=')[1].split('#')[0].strip())
@@ -254,7 +253,8 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
             # get the direction of the movement
             direction = '+' if diff_vecs[at_idx][dim_idx] > 0 else '-'
             # double the direction if we have four displacements and this is a double displacement
-            if tmp_delta == delta*2: direction += direction
+            if tmp_delta == delta*2:
+                direction += direction
             #log("Atom {} moved in direction {} in dimension {}".format(real_at_index, direction, dim_idx))
             results[dir]['names'].append("{}{}{}".format(real_at_index, 'xyz'[dim_idx], direction))
             vibname2dir[results[dir]['names'][-1]] = (dir, i) # store dir and index
@@ -271,7 +271,6 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
         # save the forces as <name>.<label>.json
         # content of this file is a dict {'forces': np.ndarray}
         dir, idx = vibname2dir[disp.name]
-        json_path = "{}.{}.json".format(name, disp.name)
         dct = {'forces': results[dir]['forces'][idx]}
         with vib.cache.lock(disp.name) as handle:
             if handle is None:

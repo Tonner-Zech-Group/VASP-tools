@@ -39,7 +39,7 @@ def check_vasp_potcar_order(path) -> Optional[str]:
         elements_potcar = [lines[0].split(':')[-1].strip().split()[1]]
     else:
         assert len(lines) % 2 == 0, "POTCAR: lines are not even"
-        elements_potcar = [ l.split(':')[-1].strip().split()[1] for l in lines[0:int(len(lines)/2)] ]
+        elements_potcar = [ line.split(':')[-1].strip().split()[1] for line in lines[0:int(len(lines)/2)] ]
     if elements_poscar != elements_potcar:
         return "POTCAR order does not match POSCAR order"
     else:

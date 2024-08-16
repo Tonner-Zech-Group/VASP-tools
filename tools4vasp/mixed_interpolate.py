@@ -2,19 +2,13 @@
 
 # Uses geodesic interpolation for the molecule and idpp interpolation for the surface of a molecule
 
-from ase.io import read, write
+from ase.io import read
 from ase import Atoms
-import re
-import os
-import sys
 from ase.mep import NEB
 from ase.calculators.lj import LennardJones as LJ
-from ase.io import read,Trajectory
+from ase.io import Trajectory
 from ase.visualize import view
 from pathlib import Path
-import csv
-from decimal import Decimal
-import ase.io
 from geodesic_interpolate.interpolation import redistribute
 from geodesic_interpolate.geodesic import Geodesic
 from math import floor,ceil
@@ -134,7 +128,7 @@ def main():
         atoms_geodesic = trajectory_geodesic[nr]
         molecule = atoms_geodesic[moleculeStart:]
         surface = atoms_idpp[:moleculeStart]
-        if nr == 0 and args.check == True: #check the cutoff
+        if nr == 0 and args.check is True: #check the cutoff
             view(surface)
             view(molecule)
         merged = Atoms(surface + molecule) #merge the molecule and the surface
@@ -145,6 +139,6 @@ def main():
         Path(N).mkdir(parents=True,exist_ok=True)
         newTrajectory[nr].write(f'{N}/POSCAR',format='vasp')
     
-    if args.show == True:
+    if args.show is True:
         view(newTrajectory)
 main()

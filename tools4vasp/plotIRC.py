@@ -120,7 +120,7 @@ def plot_irc(irc_data, silent=False):
     plt.rc('text', usetex=True)
     plt.rc('font', size=12)
     plt.rcParams["font.family"] = "Arial"
-    fig = plt.figure(constrained_layout=True)
+    _ = plt.figure(constrained_layout=True)
     plt.plot(irc_data[0], irc_data[1], label='IRC_e', color='#B02F2C')
     plt.plot(irc_data[4], irc_data[5], label='IRC_p', color='#B02F2C')
     plt.plot(irc_data[2], irc_data[3], linestyle='dashed', color='#8AC2D1', marker='o',

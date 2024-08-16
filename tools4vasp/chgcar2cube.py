@@ -5,7 +5,6 @@
 # 2022/04/04
 #
 # You can import the module and then call .main() or use it as a script
-from curses import has_key
 from pymatgen.io.vasp.outputs import Chgcar
 from pymatgen.io.ase import AseAtomsAdaptor
 from ase.io.cube import write_cube
@@ -23,10 +22,12 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
 
         #if output exists mv to .bak
         if os.path.isfile(outFiles[iFile]):
-            if verbose: print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
+            if verbose:
+                print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
             os.rename(outFiles[iFile], outFiles[iFile]+'.bak')
 
-        if verbose: print("Reading {}".format(inFile))
+        if verbose:
+            print("Reading {}".format(inFile))
         full_chgcar = Chgcar.from_file(inFile)
         spinpol = 'diff' in full_chgcar.data.keys()
         if return_spin_integrals and not spinpol:
@@ -67,25 +68,32 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
             if mult_volume:
                 factor /= atoms.get_volume()
             full_chgcar.data['total'] /= factor
-            if spinpol: full_chgcar.data['diff'] /= factor
+            if spinpol:
+                full_chgcar.data['diff'] /= factor
             #write cube
             filename = "{}.cube".format(outFiles[iFile])
-            if verbose: print("Writing {}".format(filename))
+            if verbose:
+                print("Writing {}".format(filename))
             with open(filename, 'w') as f:
                 write_cube(f, atoms, data=full_chgcar.data['total'], origin=origin)
             if spinpol:
                 filename = "{}_mag.cube".format(outFiles[iFile])
-                if verbose: print("Writing {}".format(filename))
+                if verbose:
+                    print("Writing {}".format(filename))
                 with open(filename, 'w') as f:
                     write_cube(f, atoms, data=full_chgcar.data['diff'], origin=origin)
                 
     if return_integrals:
         if len(integrals) == 1:
-            if return_spin_integrals: return integrals[0], spin_integrals[0]
-            else: return integrals[0]
+            if return_spin_integrals:
+                return integrals[0], spin_integrals[0]
+            else:
+                return integrals[0]
         else:
-            if return_spin_integrals: return integrals, spin_integrals
-            else: return integrals
+            if return_spin_integrals:
+                return integrals, spin_integrals
+            else:
+                return integrals
     else:
         return
 
