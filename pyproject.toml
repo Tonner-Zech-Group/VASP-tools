@@ -24,7 +24,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: Unix",
     "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Materials Science",
     "Topic :: Scientific/Engineering :: Chemistry",
 ]
 
