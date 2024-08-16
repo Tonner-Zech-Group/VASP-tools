@@ -35,3 +35,5 @@ jobs:
       run: |
         pip install pytest
         pytest
+    - name: Run ShellCheck
+      uses: azohra/shell-linter@latest
