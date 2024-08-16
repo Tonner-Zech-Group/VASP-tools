@@ -9,7 +9,7 @@ from ase.calculators.vasp.vasp import Vasp
 from ase import io
 import os
 import numpy as np
-from typing import Optional, List
+from typing import Optional
 import subprocess
 
 def _get_elements_from_outcar(f: TextIOWrapper) -> list:
