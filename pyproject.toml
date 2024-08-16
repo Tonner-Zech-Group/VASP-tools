@@ -23,9 +23,9 @@ classifiers = [
     "Programming Language :: Unix Shell",
     "License :: OSI Approved :: MIT License",
     "Operating System :: Unix",
-    "Intended Audience" :: "Science/Research",
-    "Topic" :: "Scientific/Materials Science",
-    "Topic" :: Scientific/Engineering :: Chemistry
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Materials Science",
+    "Topic :: Scientific/Engineering :: Chemistry",
 ]
 
 [project.urls]
