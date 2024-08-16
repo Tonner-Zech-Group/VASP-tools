@@ -3,10 +3,6 @@
 name: Release Python Package
 
 on:
-  workflow_run:
-    workflows: [Basic tests]
-    types:
-      - completed
   push:
     tags:
       - "v*"
@@ -28,6 +24,13 @@ jobs:
     name: Build distribution
     runs-on: ubuntu-latest
     steps:
+    - name: Wait for tests to succeed
+      uses: lewagon/wait-on-check-action@v1.3.4
+      with:
+        ref: ${{ github.ref }}
+        check-name: 'Basic tests'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        wait-interval: 10
     - uses: actions/checkout@v4
     - name: Set up Python
       uses: actions/setup-python@v5
