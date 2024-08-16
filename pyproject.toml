@@ -20,8 +20,12 @@ readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Unix Shell",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "Operating System :: Unix",
+    "Intended Audience" :: "Science/Research",
+    "Topic" :: "Scientific/Materials Science",
+    "Topic" :: Scientific/Engineering :: Chemistry
 ]
 
 [project.urls]
