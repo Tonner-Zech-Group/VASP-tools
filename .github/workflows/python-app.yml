@@ -37,3 +37,5 @@ jobs:
         pytest
     - name: Run ShellCheck
       uses: azohra/shell-linter@latest
+      with:
+        path: "tools4vasp"
