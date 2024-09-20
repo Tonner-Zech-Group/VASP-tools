@@ -9,7 +9,7 @@ Clone this repository and run `pip install .` inside the main directory. If you 
 You can also use the latest release by installing it from PyPi:
 
 ```bash
-pip install orcatools
+pip install tools4vasp
 ```
 
 ## Dependencies
