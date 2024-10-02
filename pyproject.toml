@@ -30,3 +30,9 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/Tonner-Zech-Group/VASP-tools"
 Issues = "https://github.com/Tonner-Zech-Group/VASP-tools/issues"
+
+
+[project.scripts]
+add-MODECAR = "tools4vasp.add_MODECAR:addMODECAR"
+chgcar2cube = "tools4vasp.chgcar2cube:main"
+mixed_interpolate = "tools4vasp.mixed_interpolate:main"
