@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
+from ase import io
+import numpy as np
 
-def addMODECAR():
+def main():
     """
     Add the displacements from a MODECAR file to the positions in a POSCAR file.
     """
-    from ase import io
-    import numpy as np
-
+    
     poscar = io.read('POSCAR')
 
     add = np.loadtxt('MODECAR')
@@ -19,4 +19,4 @@ def addMODECAR():
 
 
 if __name__ == '__main__':
-    addMODECAR()
+    main()

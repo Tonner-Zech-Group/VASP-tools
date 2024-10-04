@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", 'toml']
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -32,7 +32,31 @@ Homepage = "https://github.com/Tonner-Zech-Group/VASP-tools"
 Issues = "https://github.com/Tonner-Zech-Group/VASP-tools/issues"
 
 
+
 [project.scripts]
-add-MODECAR = "tools4vasp.add_MODECAR:addMODECAR"
+add-MODECAR = "tools4vasp.add_MODECAR:main"
 chgcar2cube = "tools4vasp.chgcar2cube:main"
 mixed_interpolate = "tools4vasp.mixed_interpolate:main"
+calc-deformation-density = "tools4vasp.calc_deformation_density:main"
+elf2cube = "tools4vasp.elf2cube:main"
+freq2jmol = "tools4vasp.freq2jmol:main"
+freq2mode = "tools4vasp.freq2mode:main"
+kgrid2kspacing = "tools4vasp.kgrid2kspacing:main"
+kspacing2kgrid = "tools4vasp.kspacing2kgrid:main"
+neb2movie = "tools4vasp.neb2movie:main"
+plot-neb-movie = "tools4vasp.plot_neb_movie:main"
+plotIRC = "tools4vasp.plotIRC:main"
+plotNEB = "tools4vasp.plotNEB:main"
+poscar2nbands = "tools4vasp.poscar2nbands:main"
+replace_potcar_symlinks = "tools4vasp.replace_potcar_symlinks:main"
+split_vasp_freq = "tools4vasp.split_vasp_freq:main"
+vasp2traj = "tools4vasp.vasp2traj:main"
+vaspcheck = "tools4vasp.vaspcheck:main"
+vaspGetEF = "tools4vasp.vaspGetEF:main"
+viewMode = "tools4vasp.viewMode:main"
+visualize-maagnetization = "tools4vasp.visualize_magnetization:main"
+
+
+[tool.setuptools]
+packages = ["tools4vasp",'tools4vasp.bash_scripts']
+package-dir = {'' = 'src'}
