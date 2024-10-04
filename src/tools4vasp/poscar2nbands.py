@@ -13,9 +13,12 @@ def get_nbands():
     print(lobsterin._get_nbands(Structure.from_file("POSCAR")))
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     parser = argparse.ArgumentParser(
         description='Get NBANDS for LOBSTER from current POSCAR, POTCAR and INCAR')
     args = parser.parse_args()
     get_nbands()
+
+if __name__ == "__main__":
+    main()

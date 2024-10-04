@@ -69,7 +69,7 @@ def read_frequency_from_outcar(outcar, freq_line, atoms):
     return current_frequency
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         prog="freq2mode",
         description="A VASP tool, which generates MODECAR and mass-weighted MODCAR files from frequency calculations",
@@ -111,3 +111,6 @@ if __name__ == "__main__":
     print("Writing mass-weighted MODECAR file")
     frequency_mw = generate_mw(frequency, atoms)
     write_modecar(frequency_mw, "MODECAR.MW")
+
+if __name__ == "__main__":
+    main()

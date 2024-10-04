@@ -142,4 +142,6 @@ def main():
     
     if args.show is True:
         view(newTrajectory)
-main()
+
+if __name__ == '__main__':
+    main()
