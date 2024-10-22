@@ -12,7 +12,7 @@ import numpy as np
 import os
 
 
-def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_integrals=False, mult_volume=False):
+def chgcar2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_integrals=False, mult_volume=False):
     assert len(inFiles) == len(outFiles), "Number of input and output files must be equal!"
     integrals = []
     spin_integrals = []
@@ -98,8 +98,7 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
         return
 
 
-
-if __name__ == "__main__":
+def main():
     import argparse
     parser = argparse.ArgumentParser(description='Convert one or many CHGCAR-like files to cube format.')
     parser.add_argument('input', type=str, nargs='+', help='Input Files')
@@ -108,4 +107,9 @@ if __name__ == "__main__":
     parser.add_argument('--integral', help='Print Integrals', action='store_true')
     parser.add_argument('--volume', help='Multiply the Density with the Cell Volume', action='store_true')
     args = parser.parse_args()
-    main(args.input, args.output, verbose=args.v, return_integrals=args.integral, mult_volume=args.volume)
+    chgcar2cube(args.input, args.output, verbose=args.v, return_integrals=args.integral, mult_volume=args.volume)
+
+
+
+if __name__ == "__main__":
+    main()
