@@ -21,19 +21,34 @@ Different for each script, but mainly
 - [Pymatgen](https://pymatgen.org/)
 - [Geodesic Interpolation](https://github.com/virtualzx-nad/geodesic-interpolate)
 
+## Usage
+
+All scripts can be accessed directly from the shell after installation with pip.
+
 ## Pre-Processing
 
-- freq2mode: generates MODECAR and mass-weighted MODCAR files from frequency calculations
+- add_MODECAR: Add the displacements from a MODECAR file to the positions in a POSCAR file.
+- freq2mode: generates MODECAR and mass-weighted MODCAR files from frequency calculations.
 
 ## Post-Processing
 
-- chgcar2cube.py: Convert CHGCAR-like files to cube files using Pymatgen and ASE.
-- neb2movie.py: Convert VASP NEB to ASE ext-xyz movie, just like nebmovie.pl of VTST.
-- poscar2nbands.py: Helper to get the NBANDS value for LOBSTER calculations using the current POSCAR, INCAR and POTCAR setup with 'standard' options.
-- vasp2traj.py: Convert VASP geometry optimization output to ASE compatible ext-xyz trajectory file.
-- vasp-check.py: Assert proper occupations and SCF+GO convergence in VASP using ASE.
-- vaspGetEF.py: Creates a plot of energy and forces along multiple GO runs (e.g. for restart jobs). Gathers data in all numeric subfolders and this folder containing a vasprun.xml file (depth one) and combines them in a single plot.
-- visualize-magnetization.sh: Creates a VMD visualisation state file for the magnetization denisty by splitting the CHGCAR (by running chgsplit.pl), converting it to a cube file (by running chgcar2cube.sh) and then creating representations for VMD.
-- viewMode.py: Shows a graphical preview of a MODECAR file using ase gui
+- calc_deformation_density: Calculate the deformation density from three VASP run folders AB, A and B.
+- chgcar2cube: Convert CHGCAR-like files to cube files using Pymatgen and ASE.
+- elf2cube: Script to convert ELFCAR files to cube files.
+- freq2jmol: Write JMol compatible xyz for visualization of vibrational modes.
+- freq2mode: A VASP tool, which generates MODECAR and mass-weighted MODCAR files from frequency calculations.
+- kgrid2kspacing: Script to get a KSPACING from a KPOINTS file and a POSCAR.
+- kspacing2kgrid: Script to get a KGrid from a KSPACING value and a POSCAR. 
+- mixed_interpolate: Uses geodesic interpolation for the molecule and idpp interpolation for the surface of a molecule.
+- neb2movie: Convert VASP NEB to ASE ext-xyz movie, just like nebmovie.pl of VTST.
+- plot_neb_movie: Use VMD and plotNEB to create images for NEB curve presentation.
 - plotIRC: Tool that creates a plot of VASP IRC calculations in both direction and is compatible with shifts in the starting structure.
-- replace_potcar_symlinks.sh: Searches for POTCARS in subdirs and replaces them with symlinks. CAREFUL!
+- plotNEB: Script to plot VASP+TST NEB calculation results.
+- poscar2nbands: Helper to get the NBANDS value for LOBSTER calculations using the current POSCAR, INCAR and POTCAR setup with 'standard' options.
+- replace_potcar_symlinks: Searches for POTCARS in subdirs and replaces them with symlinks. CAREFUL!
+- split_vasp_freq: A script to split a VASP frequency calculation into individual parts and recombine the results.
+- vasp2traj: Convert VASP geometry optimization output to ASE compatible ext-xyz trajectory file.
+- vaspcheck: Assert proper occupations and SCF+GO convergence in VASP using ASE.
+- vaspGetEF: Creates a plot of energy and forces along multiple GO runs (e.g. for restart jobs). Gathers data in all numeric subfolders and this folder containing a vasprun.xml file (depth one) and combines them in a single plot.
+- viewMode: Shows a graphical preview of a MODECAR file using ase gui
+- visualize_magnetization: Creates a VMD visualisation state file for the magnetization denisty by splitting the CHGCAR (by running chgsplit.pl), converting it to a cube file (by running chgcar2cube.sh) and then creating representations for VMD.

@@ -11,7 +11,7 @@ dependencies = [
   'numpy >= 1.24.3',
   'pymatgen >= 2023.5.10',  
 ]
-version = "0.0.3"
+version = "0.1"
 authors = [
   { name="Patrick Melix", email="patrick.melix@uni-leipzig.de" },
 ]
