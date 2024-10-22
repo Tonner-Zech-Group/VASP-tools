@@ -17,7 +17,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(
         description='Get NBANDS for LOBSTER from current POSCAR, POTCAR and INCAR')
-    args = parser.parse_args()
+    _ = parser.parse_args()
     get_nbands()
 
 if __name__ == "__main__":
