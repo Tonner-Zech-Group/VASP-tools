@@ -3,7 +3,7 @@ import subprocess
 import os
 
 
-#simple wrapper for calc-deformation-density.sh script
+#simple wrapper for plot-neb-movie.sh script
 
 #
 def main():
