@@ -15,13 +15,13 @@ from ase.units import create_units
 from matplotlib import pyplot as plt
 
 
-def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, filename, lw=3, s=0, highlight=None, dispersion=None, unit='kJ/mol'):
+def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, filename, lw=3, s=0, highlight=None, dispersion=None, unit=r"$\mathrm{kJ}\,\mathrm{mol}^{-1}$"):
     msbig = 9
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.xlabel('Reaction Coordinate')# [Å]
     ax.set_xticklabels([]) #no numbers on x
-    plt.ylabel(r'$\Delta E$ [{}]'.format(unit))
+    plt.ylabel(f'$\Delta E$ [{unit}]')
     #plt.ylim([-10**exp,10**exp])
     #plt.yscale('symlog')
     #plt.gca().yaxis.grid(True)
