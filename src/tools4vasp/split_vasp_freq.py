@@ -288,19 +288,74 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
         return None
 
 
-    # Save the forces to json file to be read by ASE
+def load_vibrations(input_file, cwd=".", verbose=True, use_only_indices=None) -> Vibrations:
+    """Load an already combined vibrational calculation.
+    
+    Parameters
+    ----------
+    input_file : str
+        Input file with structure, e.g. POSCAR
+    cwd : str
+        Working directory, defaults to '.'
+    verbose : bool
+        Print information to stdout?
+    use_only_indices : list of int
+        List of indices of atoms to be moved. If None, the constraints from the input_file are used. Defaults to None. Can be used to only move a subset of atoms, even if the calculations moved more atoms. Beware to not give indices that were restrained in the original calculation, otherwise building the Vibrations object will fail.
+    Returns
+    -------
+    None or ase.vibrations.Vibrations object
+    """
+    name = os.path.join(cwd, "freq")
+    info = read_input_structure(input_file, verbose=verbose, use_only_indices=use_only_indices)
+    n_free, delta = get_nfree_delta(os.path.join(os.path.dirname(input_file), "INCAR"), verbose=verbose)
+    # Setup the ASE Vibrations Object
+    vib = Vibrations(info['atoms'], indices=info['indices'], name=name, delta=delta, nfree=n_free)
+    return vib
+
+def export_jmol(vib: Vibrations, output_file: str) -> None:
+    """Write the vibrational modes to a file that can be read by Jmol."""
+    with open(f"{output_file}.xyz", 'w') as f:
+        vib._write_jmol(f)
+
+def export_xyz_traj(vib: Vibrations, output_file: str, index: int=None) -> None:
+    """Write the vibrational modes to a xyz trajectory file.
+    
+    Parameters
+    ----------
+    vib : ase.vibrations.Vibrations
+        The vibrational modes object
+    output_file : str
+        Output file name
+    index : integer or None
+        Index of the mode to write. If None, all modes are written.
+    """
+    def _write_mode(vib_data, index, output_file):
+        with open("{}_{:03d}.xyz".format(output_file, index+1), 'w') as f:
+            for frame in vib_data.iter_animated_mode(index):
+                frame.write(f, format='extxyz')
+
+    vib_data = vib.get_vibrations()
+    if isinstance(index, int):
+        _write_mode(vib_data, index, output_file)
+    else:
+        nVibs = len(vib.get_energies())
+        for i in range(nVibs):
+            _write_mode(vib_data, i, output_file)
+
+
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(
         description='Script to split a VASP frequency calculation into individual parts and recombine the results.')
-    parser.add_argument('task', choices=['split', 'combine'],
+    parser.add_argument('task', choices=['split', 'combine', 'write_jmol', 'write_xyz_traj'],
                         help='Task to be performed')
     parser.add_argument('n_atoms', nargs='?', type=int,
                         help='Number of atoms to be moved in each partial calculation', default=10)
     parser.add_argument('-input', nargs='?', type=str,
                         help='Input file with structure, e.g. POSCAR', default='POSCAR')
+    parser.add_argument('--output', help='Output file name, will be appended with .xyz', default='vib')
     parser.add_argument('--silent', help="Don't print to stdout", default=False, action='store_true')
 
     args = parser.parse_args()
@@ -308,3 +363,9 @@ if __name__ == "__main__":
         split(args.input, args.n_atoms, verbose=not args.silent)
     elif args.task == 'combine':
         combine(args.input, verbose=not args.silent)
+    elif args.task == 'write_jmol':
+        vib = load_vibrations(args.input, verbose=not args.silent)
+        export_jmol(vib, args.output)
+    elif args.task == 'write_xyz_traj':
+        vib = load_vibrations(args.input, verbose=not args.silent)
+        export_xyz_traj(vib, args.output, index=None)
