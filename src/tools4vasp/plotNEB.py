@@ -70,7 +70,9 @@ def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, 
     plt.close()
 
 
-def main(filename='NEB.png', presentation=False, highlight=None, plot_all=False, plot_dispersion=False, unit='kJ/mol'):
+def main(filename='NEB.png', presentation=False,
+            highlight=None, plot_all=False, plot_dispersion=False,
+            unit='kJ/mol', load_dispersion=None):
     unitDict = create_units('2014')
     conv = unitDict['eV'] #VASP and TST use eV
     if '/' in unit:
@@ -81,6 +83,13 @@ def main(filename='NEB.png', presentation=False, highlight=None, plot_all=False,
     else:
         conv *= unitDict[unit]
     print("Unit conversion factor from eV to {}: {:}".format(unit, conv))
+
+    if load_dispersion:
+        import json
+        with open(load_dispersion, 'r') as f:
+            dispersion_loaded = np.array(json.load(f))
+    else:
+        dispersion_loaded = None
 
     spline = np.loadtxt('spline.dat')
     print("Spline loaded.")
@@ -107,7 +116,11 @@ def main(filename='NEB.png', presentation=False, highlight=None, plot_all=False,
         s = 0
 
     dispersion = None
-    if plot_dispersion:
+    if plot_dispersion and dispersion_loaded is not None:
+        dispersion = dispersion_loaded
+        dispersion -= dispersion[0]
+        assert len(dispersion) == nImages, "Dispersion data does not match number of images."
+    elif plot_dispersion:
         print("Collecting dispersion energies from OUTCARs.")
         dispersion = []
         for i in range(nImages):
@@ -142,5 +155,6 @@ if __name__ == "__main__":
     parser.add_argument('--plotall', help='Create main plot and each highlighted plot.', action='store_true')
     parser.add_argument('--plotdispersion', help='Include dispersion contributions in plot.', action='store_true')
     parser.add_argument('--unit', help='Set the unit used to plot, must be ase compatible.', default='kJ/mol')
+    parser.add_argument('--load-dispersion', help='Load dispersion energies from json.', type=str, default=None)
     args = parser.parse_args()
-    main(args.file, args.presentation, args.highlight, args.plotall, args.plotdispersion, args.unit)
+    main(args.file, args.presentation, args.highlight, args.plotall, args.plotdispersion, args.unit, args.load_dispersion)
