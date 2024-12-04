@@ -157,7 +157,7 @@ def plot_fe(combined, filename, lw=2, show=False) -> None:
     ax2 = ax1.twinx()
     ax2.grid(None)
     ax2.set_yscale('log')
-    ax2.set_ylabel(r'max($F$) [eV/Å]', color=color)
+    ax2.set_ylabel(r'max($F$) [eV Å$^{-1}$]', color=color)
     ax2.tick_params(axis='y', labelcolor=color)
     ax2.plot(xAxis, combined['force'], color=color, ls='-', lw=lw)
     plt.tight_layout()
