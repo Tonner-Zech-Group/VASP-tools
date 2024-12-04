@@ -61,15 +61,15 @@ cd "$root"
 
 echo "Calculating Total Deformation Density."
 #A+B
-sumCube.py -f "$2"/"$two".cube "$3"/"$three".cube -o tmp.cube
+sumCube -f "$2"/"$two".cube "$3"/"$three".cube -o tmp.cube
 #AB-(A+B)
-sumCube.py -f "$1"/"$one".cube tmp.cube -o deformation_density.cube --subtract
+sumCube -f "$1"/"$one".cube tmp.cube -o deformation_density.cube --subtract
 rm tmp.cube
 echo "Calculating Magnetization Deformation Density."
 #A+B
-sumCube.py -f "$2"/"${two}"_mag.cube "$3"/"${three}"_mag.cube -o tmp.cube
+sumCube -f "$2"/"${two}"_mag.cube "$3"/"${three}"_mag.cube -o tmp.cube
 #AB-(A+B)
-sumCube.py -f "$1"/"${one}"_mag.cube tmp.cube -o deformation_density_mag.cube --subtract
+sumCube -f "$1"/"${one}"_mag.cube tmp.cube -o deformation_density_mag.cube --subtract
 rm tmp.cube
 
 echo "Done!"

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from ase.calculators.vasp import Vasp
-import os
-os.environ['VASP_PP_PATH'] = "/home/patrickm/lib/vasp/ase"
+# needs os.environ['VASP_PP_PATH'] to point to potcar files
 def main():
     calc = Vasp(restart=True, directory='./')
     vibs = calc.get_vibrations()

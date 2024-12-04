@@ -3,7 +3,7 @@
 #set -e
 
 echo "Plotting Data..."
-nImages=$(plotNEB.py --presentation --file NEB_presentations.png --plotall | tail -1 | cut -d" " -f1)
+nImages=$(plotNEB --presentation --file NEB_presentations.png --plotall | tail -1 | cut -d" " -f1)
 echo "Processing ${nImages} images."
 
 if [[ ! -f "movie.vmd" ]]; then
