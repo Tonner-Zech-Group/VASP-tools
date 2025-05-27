@@ -1,5 +1,7 @@
 # VASP-tools
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15525217.svg)](https://doi.org/10.5281/zenodo.15525217)
+
 Our collection of tools for pre- and post-processing VASP calculations. Mainly Python and Bash.
 
 ## Installation
