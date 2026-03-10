@@ -55,8 +55,8 @@ def write_modecar(frequency, filename):
                 line += "   "
             line += "{:.10E}".format(freq)
         filestring += line + "\n"
-        with open(filename, "w") as file:
-            file.write(filestring)
+    with open(filename, "w") as file:
+        file.write(filestring)
 
 
 def read_frequency_from_outcar(outcar, freq_line, atoms):

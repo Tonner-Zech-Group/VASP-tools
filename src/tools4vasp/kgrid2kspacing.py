@@ -26,9 +26,13 @@ def get_kspacing():
     print("The corresponding KSPACING for KGRID {} {} {} is {}Å^-1, {}Å^-1, {}Å^-1".format(*kgrid, *[ round(k, 3) for k in kspacing ]))
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     parser = argparse.ArgumentParser(
         description='Get a KSPACING from current POSCAR and KPOINTS')
-    args = parser.parse_args()
+    parser.parse_args()
     get_kspacing()
+
+
+if __name__ == "__main__":
+    main()

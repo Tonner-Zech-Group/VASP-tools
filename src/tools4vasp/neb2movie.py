@@ -8,7 +8,7 @@ from ase import io
 import os
 import glob
 
-def main(outFile='movie.xyz', workdir='.', wrap='False', use=None):
+def main(outFile='movie.xyz', workdir='.', wrap=False, use=None):
     """
         use: None -> Auto use CONTCAR if available, otherwise POSCAR
              CONTCAR or POSCAR
