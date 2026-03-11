@@ -60,3 +60,7 @@ visualize-magnetization = "tools4vasp.visualize_magnetization:main"
 [tool.setuptools]
 packages = ["tools4vasp",'tools4vasp.bash_scripts']
 package-dir = {'' = 'src'}
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "-v"
