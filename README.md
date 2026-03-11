@@ -1,56 +1,125 @@
 # VASP-tools
 
+[![Basic tests](https://github.com/Tonner-Zech-Group/VASP-tools/actions/workflows/python-app.yml/badge.svg)](https://github.com/Tonner-Zech-Group/VASP-tools/actions/workflows/python-app.yml)
+[![PyPI version](https://img.shields.io/pypi/v/tools4vasp)](https://pypi.org/project/tools4vasp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/tools4vasp)](https://pypi.org/project/tools4vasp/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15525217.svg)](https://doi.org/10.5281/zenodo.15525217)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Our collection of tools for pre- and post-processing VASP calculations. Mainly Python and Bash.
+A collection of Python and Bash tools for pre- and post-processing [VASP](https://www.vasp.at/) DFT calculations, maintained by the [Tonner-Zech Group](https://github.com/Tonner-Zech-Group).
 
 ## Installation
 
-Clone this repository and run `pip install .` inside the main directory. If you want to always use the latest content of the repo you can use the 'developement' install of pip by running `pip install -e .`. Just doing `git pull` to get the latest content of the repo will then automatically result in the usage of the latest code without need to reinstall.
-
-You can also use the latest release by installing it from PyPi:
+Install the latest release from PyPI:
 
 ```bash
 pip install tools4vasp
 ```
 
+Or clone the repository for the latest development version:
+
+```bash
+git clone https://github.com/Tonner-Zech-Group/VASP-tools.git
+cd VASP-tools
+pip install .
+```
+
+Use an editable install to track repository changes without reinstalling:
+
+```bash
+pip install -e .
+```
+
 ## Dependencies
 
-Different for each script, but mainly
+| Package | Purpose |
+|---------|---------|
+| [ASE](https://wiki.fysik.dtu.dk/ase/) | Atoms and trajectory handling |
+| [Pymatgen](https://pymatgen.org/) | CHGCAR/ELFCAR parsing, LOBSTER helper |
+| [matplotlib](https://matplotlib.org/) | Plotting |
+| [natsort](https://github.com/SethMMorris/natsort) | Natural-sort for folder discovery |
+| [numpy](https://numpy.org/) | Numerical operations |
 
-- [ASE](https://wiki.fysik.dtu.dk/ase/)
-- [VTST](http://theory.cm.utexas.edu/vtsttools/)
-- [Pymatgen](https://pymatgen.org/)
-- [Geodesic Interpolation](https://github.com/virtualzx-nad/geodesic-interpolate)
+Optional dependencies (not installed automatically):
+
+- [Geodesic Interpolation](https://github.com/virtualzx-nad/geodesic-interpolate) — required by `mixed_interpolate`
+- [VTST tools](http://theory.cm.utexas.edu/vtsttools/) — used alongside NEB tools
+- [VMD](https://www.ks.uiuc.edu/Research/vmd/) — required by `plot_neb_movie` and `visualize_magnetization`
 
 ## Usage
 
-All scripts can be accessed directly from the shell after installation with pip.
+All tools are available as command-line scripts after installation:
 
-## Pre-Processing
+```bash
+vaspcheck          # check SCF/geometry convergence
+vaspGetEF          # plot energy & forces across multiple GO restarts
+plotNEB            # plot NEB barrier
+plotIRC            # plot IRC pathway
+chgcar2cube        # convert CHGCAR to cube file
+elf2cube           # convert ELFCAR to cube file
+neb2movie          # convert NEB images to ext-xyz movie
+vasp2traj          # convert geometry optimisation to trajectory
+freq2jmol          # write JMol-compatible xyz for vibrational modes
+freq2mode          # generate MODECAR from frequency calculation
+split_vasp_freq    # split/recombine VASP frequency calculation
+poscar2nbands      # compute NBANDS for LOBSTER
+kgrid2kspacing     # convert KPOINTS grid to KSPACING
+kspacing2kgrid     # convert KSPACING to k-point grid
+add-MODECAR        # add MODECAR displacements to POSCAR
+```
 
-- add_MODECAR: Add the displacements from a MODECAR file to the positions in a POSCAR file.
-- freq2mode: generates MODECAR and mass-weighted MODCAR files from frequency calculations.
+## Pre-processing tools
 
-## Post-Processing
+| Tool | Description |
+|------|-------------|
+| `add-MODECAR` | Add displacements from a MODECAR file to a POSCAR. |
+| `freq2mode` | Generate MODECAR and mass-weighted MODECAR from a frequency calculation. |
+| `kgrid2kspacing` | Get a KSPACING value from a KPOINTS file and a POSCAR. |
+| `kspacing2kgrid` | Get a k-point grid from a KSPACING value and a POSCAR. |
+| `mixed_interpolate` | Geodesic interpolation for the molecule + IDPP for the surface. |
+| `poscar2nbands` | Compute the recommended NBANDS for LOBSTER from POSCAR/INCAR/POTCAR. |
 
-- calc_deformation_density: Calculate the deformation density from three VASP run folders AB, A and B.
-- chgcar2cube: Convert CHGCAR-like files to cube files using Pymatgen and ASE.
-- elf2cube: Script to convert ELFCAR files to cube files.
-- freq2jmol: Write JMol compatible xyz for visualization of vibrational modes.
-- freq2mode: A VASP tool, which generates MODECAR and mass-weighted MODCAR files from frequency calculations.
-- kgrid2kspacing: Script to get a KSPACING from a KPOINTS file and a POSCAR.
-- kspacing2kgrid: Script to get a KGrid from a KSPACING value and a POSCAR. 
-- mixed_interpolate: Uses geodesic interpolation for the molecule and idpp interpolation for the surface of a molecule.
-- neb2movie: Convert VASP NEB to ASE ext-xyz movie, just like nebmovie.pl of VTST.
-- plot_neb_movie: Use VMD and plotNEB to create images for NEB curve presentation.
-- plotIRC: Tool that creates a plot of VASP IRC calculations in both direction and is compatible with shifts in the starting structure.
-- plotNEB: Script to plot VASP+TST NEB calculation results.
-- poscar2nbands: Helper to get the NBANDS value for LOBSTER calculations using the current POSCAR, INCAR and POTCAR setup with 'standard' options.
-- replace_potcar_symlinks: Searches for POTCARS in subdirs and replaces them with symlinks. CAREFUL!
-- split_vasp_freq: A script to split a VASP frequency calculation into individual parts and recombine the results.
-- vasp2traj: Convert VASP geometry optimization output to ASE compatible ext-xyz trajectory file.
-- vaspcheck: Assert proper occupations and SCF+GO convergence in VASP using ASE.
-- vaspGetEF: Creates a plot of energy and forces along multiple GO runs (e.g. for restart jobs). Gathers data in all numeric subfolders and this folder containing a vasprun.xml file (depth one) and combines them in a single plot.
-- viewMode: Shows a graphical preview of a MODECAR file using ase gui
-- visualize_magnetization: Creates a VMD visualisation state file for the magnetization denisty by splitting the CHGCAR (by running chgsplit.pl), converting it to a cube file (by running chgcar2cube.sh) and then creating representations for VMD.
+## Post-processing tools
+
+| Tool | Description |
+|------|-------------|
+| `calc-deformation-density` | Calculate deformation density from AB, A and B VASP run folders. |
+| `chgcar2cube` | Convert CHGCAR-like files to cube files using Pymatgen and ASE. |
+| `elf2cube` | Convert ELFCAR files to cube files. |
+| `freq2jmol` | Write JMol-compatible xyz files for vibrational mode visualisation. |
+| `neb2movie` | Convert VASP NEB images to an ASE ext-xyz movie (like `nebmovie.pl`). |
+| `plotIRC` | Plot VASP IRC calculations in both directions, shift-compatible. |
+| `plotNEB` | Plot VASP+VTST NEB calculation results. |
+| `plot_neb_movie` | Create images for NEB curve presentation using VMD and plotNEB. |
+| `replace_potcar_symlinks` | Replace POTCARs in subdirectories with symlinks. **Use with care.** |
+| `split_vasp_freq` | Split a VASP frequency calculation into parts and recombine results. |
+| `vasp2traj` | Convert VASP geometry optimisation output to an ext-xyz trajectory. |
+| `vaspcheck` | Assert proper occupations and SCF+GO convergence using ASE. |
+| `vaspGetEF` | Plot energy and forces across multiple GO runs (handles restart jobs). |
+| `viewMode` | Graphical preview of a MODECAR using `ase gui`. |
+| `visualize-magnetization` | Create a VMD visualisation state for the magnetisation density. |
+
+## Development
+
+```bash
+git clone https://github.com/Tonner-Zech-Group/VASP-tools.git
+cd VASP-tools
+pip install -e .
+pip install pytest pytest-cov ruff
+pytest
+ruff check .
+```
+
+See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, CI setup, and
+instructions for adding new tools.
+
+## Contributing
+
+1. Fork the repository and create a branch: `feat/<description>`.
+2. Write tests for new functionality in the `test/` directory.
+3. Ensure `ruff check .` and `pytest` both pass locally before opening a PR.
+4. Open a pull request against `main`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
