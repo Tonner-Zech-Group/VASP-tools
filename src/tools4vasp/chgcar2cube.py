@@ -58,30 +58,30 @@ def chgcar2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_
                     spin_integral /= n_data
                 print("Integral of diff data is {}".format(spin_integral))
 
-            origin = np.zeros(3)
-            atoms = AseAtomsAdaptor.get_atoms(full_chgcar.structure)
+        origin = np.zeros(3)
+        atoms = AseAtomsAdaptor.get_atoms(full_chgcar.structure)
 
-            #Contrary to VASP Wiki, the CHGCAR is not rho*V, but rho*n_data.
-            #So in order to have the integral over space = nelectrons, we need to divide by n_data.
-            #Since this would result in super small numbers, we can transform to rho*V
-            factor = n_data
-            if mult_volume:
-                factor /= atoms.get_volume()
-            full_chgcar.data['total'] /= factor
-            if spinpol:
-                full_chgcar.data['diff'] /= factor
-            #write cube
-            filename = "{}.cube".format(outFiles[iFile])
+        #Contrary to VASP Wiki, the CHGCAR is not rho*V, but rho*n_data.
+        #So in order to have the integral over space = nelectrons, we need to divide by n_data.
+        #Since this would result in super small numbers, we can transform to rho*V
+        factor = n_data
+        if mult_volume:
+            factor /= atoms.get_volume()
+        full_chgcar.data['total'] /= factor
+        if spinpol:
+            full_chgcar.data['diff'] /= factor
+        #write cube
+        filename = "{}.cube".format(outFiles[iFile])
+        if verbose:
+            print("Writing {}".format(filename))
+        with open(filename, 'w') as f:
+            write_cube(f, atoms, data=full_chgcar.data['total'], origin=origin)
+        if spinpol:
+            filename = "{}_mag.cube".format(outFiles[iFile])
             if verbose:
                 print("Writing {}".format(filename))
             with open(filename, 'w') as f:
-                write_cube(f, atoms, data=full_chgcar.data['total'], origin=origin)
-            if spinpol:
-                filename = "{}_mag.cube".format(outFiles[iFile])
-                if verbose:
-                    print("Writing {}".format(filename))
-                with open(filename, 'w') as f:
-                    write_cube(f, atoms, data=full_chgcar.data['diff'], origin=origin)
+                write_cube(f, atoms, data=full_chgcar.data['diff'], origin=origin)
                 
     if return_integrals:
         if len(integrals) == 1:

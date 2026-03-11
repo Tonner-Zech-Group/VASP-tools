@@ -61,7 +61,7 @@ def read_irc(directory):
     return init_structure, steps, energies
 
 
-def generate_plot(irc_e, irc_p, ts):
+def generate_plot(irc_e, irc_p, ts, offset=None):
     # check if a transition state was supplied. otherwise use the first image of the product irc as the image
     ts_exists = True
     if ts is None:
@@ -96,15 +96,15 @@ def generate_plot(irc_e, irc_p, ts):
             irc_e[1][i] = (irc_e[1][i] * (-1)) - reactant_offset
     # Generate basic plot data
     # Offset energy
-    if args.offset is None:
-        offset = 0 - ts[1]
+    if offset is None:
+        energy_offset = 0 - ts[1]
     else:
-        offset = args.offset - ts[1]
+        energy_offset = offset - ts[1]
     for i in range(len(irc_e[2])):
-        irc_e[2][i] = irc_e[2][i] + offset
+        irc_e[2][i] = irc_e[2][i] + energy_offset
     for i in range(len(irc_p[2])):
-        irc_p[2][i] = irc_p[2][i] + offset
-    ts = (ts[0], ts[1] + offset)
+        irc_p[2][i] = irc_p[2][i] + energy_offset
+    ts = (ts[0], ts[1] + energy_offset)
     # Generate additional plot data
     if ts_exists:
         s_plot_x = [irc_e[1][0], 0, irc_p[1][0]]
@@ -132,7 +132,7 @@ def plot_irc(irc_data, silent=False):
         plt.show()
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         prog='plotIRC',
         description='Tool that creates a plot of VASP IRC calculations in both direction and is compatible with shifts in the starting structure.',
@@ -154,8 +154,12 @@ if __name__ == "__main__":
     irc_e = read_irc(args.reactant_dir)
     irc_p = read_irc(args.product_dir)
     if args.transition_state == "none":
-        plot_data = generate_plot(irc_e, irc_p, None)
+        plot_data = generate_plot(irc_e, irc_p, None, offset=args.offset)
     else:
         ts = read_sp(args.transition_state, args.allow_freq)
-        plot_data = generate_plot(irc_e, irc_p, ts)
+        plot_data = generate_plot(irc_e, irc_p, ts, offset=args.offset)
     plot_irc(plot_data, args.silent)
+
+
+if __name__ == "__main__":
+    main()

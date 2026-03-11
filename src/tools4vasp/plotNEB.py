@@ -21,6 +21,8 @@ def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, 
         parts = unit.split("/")
         assert len(parts) == 2, "Only one division allowed for unit conversion."
         unit_label = r"$\mathrm{" + parts[0] + "}" + r"\,\mathrm{" + parts[1] + r"}^{-1}$"
+    else:
+        unit_label = r"$\mathrm{" + unit + r"}$"
     msbig = 9
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -37,20 +39,21 @@ def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, 
     delta = dScale*maxX
     yRange = max(energySpline) - min(energySpline)
     for i,x in enumerate(reactionCoordImageAxis):
-        tangentX = [x-delta, x+delta]
-        tangentY = [energies[i]+(delta*forces[i]),energies[i]-(delta*forces[i])] #invert sign of forces from neb output
+        cur_delta = delta
+        tangentX = [x-cur_delta, x+cur_delta]
+        tangentY = [energies[i]+(cur_delta*forces[i]),energies[i]-(cur_delta*forces[i])] #invert sign of forces from neb output
         if i == 0:
             label = 'NEB Force'
         else:
             label = None
         # limit y range of tangent
         tangentYRange = max(tangentY) - min(tangentY)
-        factor = delta * 0.1
+        factor = cur_delta * 0.1
         n = 1
         while tangentYRange > 0.1 * yRange:
-            delta -= factor
-            tangentX = [x-delta, x+delta]
-            tangentY = [energies[i]+(delta*forces[i]),energies[i]-(delta*forces[i])] #invert sign of forces from neb output
+            cur_delta -= factor
+            tangentX = [x-cur_delta, x+cur_delta]
+            tangentY = [energies[i]+(cur_delta*forces[i]),energies[i]-(cur_delta*forces[i])] #invert sign of forces from neb output
             tangentYRange = max(tangentY) - min(tangentY)
             n += 1
             if n >= 11:
@@ -147,7 +150,6 @@ def main(filename='NEB.png', presentation=False,
 
 
 if __name__ == "__main__":
-    exec(open("/home/patrickm/git/Python4ChemistryTools/mpl-settings.py").read())
     parser = argparse.ArgumentParser(description='Plot VASP+TST NEB results')
     parser.add_argument('--file', help='Plot Filename', default='NEB.png')
     parser.add_argument('--presentation', help='Presentation Mode (i.e. thicker lines)', action='store_true')

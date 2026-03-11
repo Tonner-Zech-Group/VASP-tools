@@ -12,7 +12,7 @@ import numpy as np
 import os
 
 
-def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_integrals=False):
+def elf2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_integrals=False):
     assert len(inFiles) == len(outFiles), "Number of input and output files must be equal!"
     integrals = []
     spin_integrals = []
@@ -30,7 +30,7 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
             print("Reading {}".format(inFile))
         full_elfcar = Elfcar.from_file(inFile)
         spinpol = 'diff' in full_elfcar.data.keys()
-        #pymatgen: “total” key refers to Spin.up, and “diff” refers to Spin.down.
+        #pymatgen: "total" key refers to Spin.up, and "diff" refers to Spin.down.
         if return_spin_integrals and not spinpol:
             raise ValueError("File {} is not spinpolarized!".format(inFile))
         shape = full_elfcar.data['total'].shape
@@ -60,32 +60,32 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
                     spin_integral = (np.sum(np.abs(full_elfcar.data['total'])), np.sum(np.abs(full_elfcar.data['diff'])))
                 print("Integral of spin data is up: {}, down: {}".format(*spin_integral))
 
-            origin = np.zeros(3)
-            atoms = AseAtomsAdaptor.get_atoms(full_elfcar.structure)
+        origin = np.zeros(3)
+        atoms = AseAtomsAdaptor.get_atoms(full_elfcar.structure)
 
-            # write cubes
-            if spinpol:
-                filename = "{}_up.cube".format(outFiles[iFile])
-                if verbose:
-                    print("Writing {}".format(filename))
-                with open(filename, 'w') as f:
-                    write_cube(f, atoms, data=full_elfcar.data['total'], origin=origin)
-                filename = "{}_down.cube".format(outFiles[iFile])
-                if verbose:
-                    print("Writing {}".format(filename))
-                with open(filename, 'w') as f:
-                    write_cube(f, atoms, data=full_elfcar.data['diff'], origin=origin)
-                filename = "{}_diff.cube".format(outFiles[iFile])
-                if verbose:
-                    print("Writing {}".format(filename))
-                with open(filename, 'w') as f:
-                    write_cube(f, atoms, data=full_elfcar.data['total']-full_elfcar.data['diff'], origin=origin)
-            else:
-                filename = "{}.cube".format(outFiles[iFile])
-                if verbose:
-                    print("Writing {}".format(filename))
-                with open(filename, 'w') as f:
-                    write_cube(f, atoms, data=full_data, origin=origin)
+        # write cubes
+        if spinpol:
+            filename = "{}_up.cube".format(outFiles[iFile])
+            if verbose:
+                print("Writing {}".format(filename))
+            with open(filename, 'w') as f:
+                write_cube(f, atoms, data=full_elfcar.data['total'], origin=origin)
+            filename = "{}_down.cube".format(outFiles[iFile])
+            if verbose:
+                print("Writing {}".format(filename))
+            with open(filename, 'w') as f:
+                write_cube(f, atoms, data=full_elfcar.data['diff'], origin=origin)
+            filename = "{}_diff.cube".format(outFiles[iFile])
+            if verbose:
+                print("Writing {}".format(filename))
+            with open(filename, 'w') as f:
+                write_cube(f, atoms, data=full_elfcar.data['total']-full_elfcar.data['diff'], origin=origin)
+        else:
+            filename = "{}.cube".format(outFiles[iFile])
+            if verbose:
+                print("Writing {}".format(filename))
+            with open(filename, 'w') as f:
+                write_cube(f, atoms, data=full_data, origin=origin)
 
     if return_integrals:
         if len(integrals) == 1:
@@ -102,11 +102,15 @@ def main(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_in
         return
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     parser = argparse.ArgumentParser(description='Convert one or many ELFCAR files to cube format.')
     parser.add_argument('input', type=str, nargs='+', help='Input Files')
     parser.add_argument('-output', type=str, nargs='+', help='Output File Names (no extension)')
     parser.add_argument('-v', help='Verbose', action='store_true')
     args = parser.parse_args()
-    main(args.input, args.output, verbose=args.v)
+    elf2cube(args.input, args.output, verbose=args.v)
+
+
+if __name__ == "__main__":
+    main()

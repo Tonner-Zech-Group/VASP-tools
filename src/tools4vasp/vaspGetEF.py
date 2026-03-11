@@ -63,7 +63,7 @@ def read_xml(path, verbose=False, write_fe=False) -> Tuple[List[float]]:
         fe.close()
     return forces, energies
 
-def get_all_xmls(path, vervose=False) -> List[str]:
+def get_all_xmls(path, verbose=False) -> List[str]:
     """Get all xml files in the path and numerical subdirectories.
 
     Input Parameters
@@ -114,7 +114,7 @@ def process_all_xmls(path, verbose=False, write_json=False) -> Dict[str, List[fl
                 print("Adding {}".format(folder))
         else:
             print("Generating fe.dat in {}".format(folder))
-            f, e = read_xml(f, verbose=verbose, write_fe=True)
+            read_xml(f, verbose=verbose, write_fe=True)
             assert os.path.isfile(os.path.join(folder,'fe.dat')), "Problem generating fe.dat in {:}".format(folder)
         to_add = np.loadtxt(os.path.join(folder,'fe.dat'))
         # check if only one entry

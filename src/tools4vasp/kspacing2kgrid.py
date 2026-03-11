@@ -18,10 +18,14 @@ def get_kgrid(kspacing):
     print("The corresponding KGRID for KSPACING {}Å^-1 is: {} {} {}".format(kspacing, *kgrid))
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     parser = argparse.ArgumentParser(
         description='Get a KGrid from current POSCAR and a KSPACING value')
     parser.add_argument('kspacing', type=float, help='KSPACING value')
     args = parser.parse_args()
     get_kgrid(args.kspacing)
+
+
+if __name__ == "__main__":
+    main()
