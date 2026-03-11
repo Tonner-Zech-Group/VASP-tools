@@ -28,7 +28,7 @@ def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, 
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.xlabel('Reaction Coordinate')# [Å]
     ax.set_xticklabels([]) #no numbers on x
-    plt.ylabel(f'$\Delta E$ [{unit_label}]')
+    plt.ylabel(f'$\\Delta E$ [{unit_label}]')
     #plt.ylim([-10**exp,10**exp])
     #plt.yscale('symlog')
     #plt.gca().yaxis.grid(True)

@@ -167,7 +167,7 @@ def plot_fe(combined, filename, lw=2, show=False) -> None:
     plt.close()
 
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) > 1:
         path = sys.argv[1]
     else:
@@ -175,4 +175,8 @@ if __name__ == '__main__':
     combined = process_all_xmls(path, verbose=True, write_json=True)
     plot_fe(combined, 'fe-combined.png')
     print('...Done!')
+
+
+if __name__ == '__main__':
+    main()
 
