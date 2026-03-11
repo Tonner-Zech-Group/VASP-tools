@@ -112,7 +112,8 @@ def test_get_kgrid_cubic_box(poscar_path, monkeypatch):
 
 def test_get_kgrid_large_spacing_gives_one(poscar_path, monkeypatch):
     """Very large kspacing should result in a 1×1×1 grid (minimum enforced)."""
-    import io, sys
+    import io
+    import sys
     from tools4vasp.kspacing2kgrid import get_kgrid
     monkeypatch.chdir(poscar_path.parent)
 
@@ -136,7 +137,8 @@ def test_get_kspacing_runs(poscar_kpoints_dir, monkeypatch):
 
 def test_get_kspacing_output_contains_values(poscar_kpoints_dir, monkeypatch):
     """get_kspacing() output must report the kgrid and computed kspacing."""
-    import io, sys
+    import io
+    import sys
     from tools4vasp.kgrid2kspacing import get_kspacing
     monkeypatch.chdir(poscar_kpoints_dir)
 
@@ -492,7 +494,7 @@ def test_chgcar2cube_returns_integral(tmp_path):
 
 def test_chgcar2cube_spinpol_writes_mag_cube(tmp_path):
     """chgcar2cube() must write a _mag.cube file for spin-polarised input."""
-    from unittest.mock import MagicMock, patch, call
+    from unittest.mock import MagicMock, patch
     from tools4vasp.chgcar2cube import chgcar2cube
 
     infile = tmp_path / "CHGCAR"
@@ -511,7 +513,7 @@ def test_chgcar2cube_spinpol_writes_mag_cube(tmp_path):
          patch("tools4vasp.chgcar2cube.write_cube") as mock_write:
         chgcar2cube([str(infile)], [outbase], verbose=False)
 
-    written_files = [call.args[0].name for call in mock_write.call_args_list]
+    written_files = [c.args[0].name for c in mock_write.call_args_list]
     assert any("_mag.cube" in f for f in written_files), "_mag.cube must be written for spinpol"
 
 
@@ -540,7 +542,7 @@ def test_elf2cube_spinpol_writes_three_cubes(tmp_path):
          patch("tools4vasp.elf2cube.write_cube") as mock_write:
         elf2cube([str(infile)], [outbase], verbose=False)
 
-    written_files = [call.args[0].name for call in mock_write.call_args_list]
+    written_files = [c.args[0].name for c in mock_write.call_args_list]
     assert any("_up.cube" in f for f in written_files)
     assert any("_down.cube" in f for f in written_files)
     assert any("_diff.cube" in f for f in written_files)

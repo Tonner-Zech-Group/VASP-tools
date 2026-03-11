@@ -3,7 +3,6 @@ Shared pytest configuration and fixtures for tools4vasp tests.
 """
 import os
 import pytest
-import numpy as np
 
 # Force non-interactive matplotlib backend for all tests
 os.environ.setdefault("MPLBACKEND", "Agg")

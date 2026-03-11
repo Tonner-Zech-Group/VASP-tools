@@ -2,13 +2,9 @@
 Extended coverage tests — exercises previously uncovered code paths using
 mocking and lightweight fixtures. No real VASP installation needed.
 """
-import math
 import os
-import sys
 import io
-import inspect
-import tempfile
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -679,7 +675,7 @@ def test_plotIRC_plot_irc_runs(tmp_path):
     )
     # plot_irc uses mpl.use("pgf") and plt.rc(usetex=True) which needs LaTeX;
     # mock the entire plt and mpl interfaces to stay self-contained.
-    with patch("tools4vasp.plotIRC.mpl") as mock_mpl, \
+    with patch("tools4vasp.plotIRC.mpl"), \
          patch("tools4vasp.plotIRC.plt") as mock_plt:
         mock_plt.figure.return_value = MagicMock()
         plot_irc(irc_data, silent=True)
@@ -694,7 +690,6 @@ def test_plotIRC_plot_irc_runs(tmp_path):
 def test_load_vibrations_returns_vibrations_object(tmp_path):
     """load_vibrations() must return an ASE Vibrations object."""
     from tools4vasp.split_vasp_freq import load_vibrations
-    import ase
     poscar = tmp_path / "POSCAR"
     poscar.write_text(_POSCAR_H)
     incar = tmp_path / "INCAR"
@@ -994,7 +989,7 @@ def test_neb2movie_explicit_use_poscar(tmp_path):
     with patch("tools4vasp.neb2movie.io.read", return_value=fake_atom) as mock_read:
         neb2movie.main(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), use="POSCAR")
 
-    paths = [str(call.args[0]) for call in mock_read.call_args_list]
+    paths = [str(c.args[0]) for c in mock_read.call_args_list]
     assert not any("CONTCAR" in p for p in paths)
     assert all("POSCAR" in p for p in paths)
 
@@ -1012,7 +1007,7 @@ def test_neb2movie_explicit_use_contcar(tmp_path):
     with patch("tools4vasp.neb2movie.io.read", return_value=fake_atom) as mock_read:
         neb2movie.main(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), use="CONTCAR")
 
-    paths = [str(call.args[0]) for call in mock_read.call_args_list]
+    paths = [str(c.args[0]) for c in mock_read.call_args_list]
     assert any("CONTCAR" in p for p in paths)
 
 

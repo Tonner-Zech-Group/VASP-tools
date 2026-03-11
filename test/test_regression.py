@@ -6,7 +6,6 @@ to FAIL on the original (unfixed) code and PASS after the fix.
 """
 import inspect
 import math
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -127,7 +126,7 @@ def test_plotNEB_delta_not_mutated_across_images(tmp_path):
     Force on image 0 is large enough to trigger clamping; all others are 0.
     With the fix every image should have identical x-width = 2 * delta.
     """
-    from unittest.mock import patch, call
+    from unittest.mock import patch
     from tools4vasp.plotNEB import plot
 
     n = 4
@@ -144,20 +143,18 @@ def test_plotNEB_delta_not_mutated_across_images(tmp_path):
 
     tangent_xwidths = []
 
-    original_plot_line = None
-
-    import matplotlib.pyplot as plt_real
+    def noop_plot_line(xs, ys, **kw):
+        pass
 
     def capture_plot(xs, ys, **kwargs):
         color = kwargs.get("color", "")
         if color == "green":
             tangent_xwidths.append(xs[1] - xs[0])
-        return original_plot_line(xs, ys, **kwargs)
+        return noop_plot_line(xs, ys, **kwargs)
 
     with patch("tools4vasp.plotNEB.plt") as mock_plt:
         mock_plt.figure.return_value.gca.return_value = mock_plt
         mock_plt.plot.side_effect = capture_plot
-        original_plot_line = lambda xs, ys, **kw: None  # no-op real call
         mock_plt.savefig = lambda *a, **kw: None
         mock_plt.close = lambda: None
         mock_plt.scatter = lambda *a, **kw: None
@@ -255,7 +252,7 @@ def test_write_modecar_writes_all_lines(tmp_path):
     write_modecar(frequency, outfile)
 
     with open(outfile) as f:
-        lines = [l for l in f.readlines() if l.strip()]
+        lines = [line for line in f.readlines() if line.strip()]
     assert len(lines) == len(frequency), \
         f"Expected {len(frequency)} lines, got {len(lines)}"
 
