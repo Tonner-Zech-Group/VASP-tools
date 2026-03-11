@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "VASP-tools"
+abstract: "A collection of Python and Bash tools for pre- and post-processing VASP DFT calculations."
+type: software
+version: "1.0.1"
+date-released: "2025-05-27"
+license: MIT
+repository-code: "https://github.com/Tonner-Zech-Group/VASP-tools"
+doi: 10.5281/zenodo.15525217
+authors:
+  - family-names: Melix
+    given-names: Patrick
+    affiliation: "Universität Leipzig"
+  - family-names: Weiske
+    given-names: Hendrik
+    affiliation: "Tonner-Zech Group"
+  - family-names: Thiemann
+    given-names: Franz
+    affiliation: "Tonner-Zech Group"
