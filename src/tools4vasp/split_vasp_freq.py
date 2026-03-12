@@ -345,27 +345,42 @@ def export_xyz_traj(vib: Vibrations, output_file: str, index: int=None) -> None:
 
 
 
-if __name__ == "__main__":
+def main():
+    """CLI entry point for split_vasp_freq."""
     import argparse
     parser = argparse.ArgumentParser(
-        description='Script to split a VASP frequency calculation into individual parts and recombine the results.')
-    parser.add_argument('task', choices=['split', 'combine', 'write_jmol', 'write_xyz_traj'],
-                        help='Task to be performed')
-    parser.add_argument('n_atoms', nargs='?', type=int,
-                        help='Number of atoms to be moved in each partial calculation', default=10)
-    parser.add_argument('-input', nargs='?', type=str,
-                        help='Input file with structure, e.g. POSCAR', default='POSCAR')
-    parser.add_argument('--output', help='Output file name, will be appended with .xyz', default='vib')
-    parser.add_argument('--silent', help="Don't print to stdout", default=False, action='store_true')
+        description="Split a VASP frequency calculation into partial jobs, recombine results, "
+                    "and export vibrational modes.",
+        epilog=(
+            "Examples:\n"
+            "  split_vasp_freq split 10         # split into batches of 10 atoms\n"
+            "  split_vasp_freq combine           # recombine partial results\n"
+            "  split_vasp_freq write_jmol        # export JMol xyz\n"
+            "  split_vasp_freq write_xyz_traj    # export animated xyz per mode"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("task", choices=["split", "combine", "write_jmol", "write_xyz_traj"],
+                        help="Task to perform")
+    parser.add_argument("n_atoms", nargs="?", type=int, default=10,
+                        help="Atoms per partial calculation for split (default: 10)")
+    parser.add_argument("--input", "-i", nargs="?", type=str, default="POSCAR",
+                        help="Input structure file, e.g. POSCAR (default: POSCAR)")
+    parser.add_argument("--output", help="Output file base name for write tasks (default: vib)",
+                        default="vib")
+    parser.add_argument("--silent", help="Suppress stdout", default=False, action="store_true")
 
     args = parser.parse_args()
-    if args.task == 'split':
+    if args.task == "split":
         split(args.input, args.n_atoms, verbose=not args.silent)
-    elif args.task == 'combine':
+    elif args.task == "combine":
         combine(args.input, verbose=not args.silent)
-    elif args.task == 'write_jmol':
+    elif args.task == "write_jmol":
         vib = load_vibrations(args.input, verbose=not args.silent)
         export_jmol(vib, args.output)
-    elif args.task == 'write_xyz_traj':
+    elif args.task == "write_xyz_traj":
         vib = load_vibrations(args.input, verbose=not args.silent)
         export_xyz_traj(vib, args.output, index=None)
+
+
+if __name__ == "__main__":
+    main()

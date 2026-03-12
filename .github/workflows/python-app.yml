@@ -1,4 +1,4 @@
-# This workflow will install Python dependencies, run tests and ruff with a single version of Python
+# This workflow will install Python dependencies, run tests and ruff with a matrix of Python versions
 
 name: Basic tests
 
@@ -15,28 +15,36 @@ jobs:
   test:
 
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pytest pytest-cov
+        pip install .
     - name: Lint with Ruff
       run: |
         pip install ruff
         ruff check --output-format=github .
       continue-on-error: false
-    - name: Test with pytest
+    - name: Test with pytest and coverage
       run: |
-        pip install pytest
-        pip install .
-        pytest
+        pytest --cov=tools4vasp --cov-report=term-missing --cov-report=xml
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: matrix.python-version == '3.12'
+      with:
+        name: coverage-report
+        path: coverage.xml
     - name: Run ShellCheck
       uses: azohra/shell-linter@latest
       with:
-        path: "tools4vasp"
+        path: "src/tools4vasp/bash_scripts"

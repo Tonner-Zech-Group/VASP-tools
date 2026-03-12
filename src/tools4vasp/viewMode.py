@@ -42,20 +42,26 @@ def make_animation(atoms, mode, frames, scale):
     return anim
 
 
-if __name__ == "__main__":
+def main():
+    """CLI entry point: show animated MODECAR preview in ASE GUI."""
     parser = argparse.ArgumentParser(
-        prog='viewMode',
-        description='shows a preview of a modecar file in ASE GUI',
-        epilog='')
-    # Add parser arguments
-    parser.add_argument("-p", "--poscar", type=str, default='POSCAR',
-                        help="path to poscar file that corresponds to the modecar file")
-    parser.add_argument("-m", "--modecar", type=str, default='MODECAR', help="modecar file that should be previewed")
-    parser.add_argument("-f", "--frames", type=int, default=60, help="number of frames in the animation")
+        prog="viewMode",
+        description="Show an animated preview of a MODECAR displacement in the ASE GUI.",
+        epilog="Example: viewMode --poscar POSCAR --modecar MODECAR --frames 60 --scale 1")
+    parser.add_argument("-p", "--poscar", type=str, default="POSCAR",
+                        help="POSCAR file corresponding to the MODECAR (default: POSCAR)")
+    parser.add_argument("-m", "--modecar", type=str, default="MODECAR",
+                        help="MODECAR displacement file to preview (default: MODECAR)")
+    parser.add_argument("-f", "--frames", type=int, default=60,
+                        help="Number of animation frames (default: 60)")
     parser.add_argument("-s", "--scale", type=float, default=1,
-                        help="factor by which the modecar will be scaled each frame")
+                        help="Displacement scale factor per frame (default: 1)")
     args = parser.parse_args()
     mode = read_modecar(args.modecar)
     atoms = ase.io.read(args.poscar)
     anim = make_animation(atoms, mode, args.frames, args.scale * 0.05)
     view(anim)
+
+
+if __name__ == "__main__":
+    main()

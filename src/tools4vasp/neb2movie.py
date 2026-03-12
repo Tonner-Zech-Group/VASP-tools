@@ -8,7 +8,7 @@ from ase import io
 import os
 import glob
 
-def main(outFile='movie.xyz', workdir='.', wrap=False, use=None):
+def run(outFile='movie.xyz', workdir='.', wrap=False, use=None):
     """
         use: None -> Auto use CONTCAR if available, otherwise POSCAR
              CONTCAR or POSCAR
@@ -54,20 +54,31 @@ def main(outFile='movie.xyz', workdir='.', wrap=False, use=None):
 
 
 
-if __name__ == "__main__":
+def main():
+    """CLI entry point: parse arguments and call run()."""
     import argparse
-    parser = argparse.ArgumentParser(description='Convert VASP NEB to ASE-extxyz trajectory')
-    parser.add_argument('-o', type=str, help='Output xyz file', default='movie.xyz')
-    parser.add_argument('-i', type=str, help='Workdir', default='.')
-    parser.add_argument('-w', help='Wrap structure with origin as center', action='store_const', default=False, const=True)
-    parser.add_argument('use', type=str, help='Use 1: CONTCAR or 0: POSCAR, default: Auto choose CONTCAR over POSCAR.', nargs='?')
+    parser = argparse.ArgumentParser(
+        description="Convert VASP NEB images to an ASE ext-xyz trajectory (like nebmovie.pl).",
+        epilog="Example: neb2movie --output movie.xyz --workdir . CONTCAR")
+    parser.add_argument("-o", "--output", type=str, default="movie.xyz",
+                        help="Output xyz file (default: movie.xyz)")
+    parser.add_argument("-i", "--workdir", type=str, default=".",
+                        help="NEB working directory containing 00/, 01/, ... subdirs (default: .)")
+    parser.add_argument("-w", "--wrap", help="Wrap atoms with origin as center",
+                        action="store_true", default=False)
+    parser.add_argument("use", type=str, nargs="?",
+                        help="Force reading CONTCAR or POSCAR (default: auto-prefer CONTCAR)")
     args = parser.parse_args()
-    if args.use == "1":
-        use = 'CONTCAR'
-    elif args.use == "0":
-        use = 'POSCAR'
+    if args.use == "CONTCAR":
+        use = "CONTCAR"
+    elif args.use == "POSCAR":
+        use = "POSCAR"
     else:
         use = None
-    main(args.o, args.i, args.w, use)
+    run(args.output, args.workdir, args.wrap, use)
+
+
+if __name__ == "__main__":
+    main()
 
 

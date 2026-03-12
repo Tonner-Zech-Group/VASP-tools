@@ -1,18 +1,9 @@
-# This workflow will upload a Python Package using Twine when a release is created
+# This workflow uploads a Python Package to TestPyPI on manual trigger
 
 name: Upload Python Package
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-      tags:
-        description: 'Test Pypi'
 
 permissions:
   contents: read

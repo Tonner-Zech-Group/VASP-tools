@@ -8,7 +8,6 @@ from natsort import natsorted
 import glob
 import os
 import json
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from ase.io.vasp import read_vasp_xml
@@ -167,12 +166,21 @@ def plot_fe(combined, filename, lw=2, show=False) -> None:
     plt.close()
 
 
-if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-    else:
-        path = os.getcwd()
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Plot energy and forces across multiple VASP geometry optimisation runs. "
+                    "Collects vasprun.xml from numeric subdirectories and the current directory.",
+        epilog="Example: vaspGetEF /path/to/calculation")
+    parser.add_argument("path", nargs="?", default=None,
+                        help="Path to VASP calculation directory (default: current directory)")
+    args = parser.parse_args()
+    path = args.path if args.path is not None else os.getcwd()
     combined = process_all_xmls(path, verbose=True, write_json=True)
-    plot_fe(combined, 'fe-combined.png')
-    print('...Done!')
+    plot_fe(combined, "fe-combined.png")
+    print("...Done!")
+
+
+if __name__ == '__main__':
+    main()
 

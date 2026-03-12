@@ -11,7 +11,7 @@ dependencies = [
   'numpy >= 1.24.3',
   'pymatgen >= 2023.5.10',  
 ]
-version = "1.0.1"
+version = "1.1.0"
 authors = [
   { name="Patrick Melix", email="patrick.melix@uni-leipzig.de" },
 ]
@@ -60,3 +60,7 @@ visualize-magnetization = "tools4vasp.visualize_magnetization:main"
 [tool.setuptools]
 packages = ["tools4vasp",'tools4vasp.bash_scripts']
 package-dir = {'' = 'src'}
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "-v"
