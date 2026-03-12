@@ -228,7 +228,7 @@ def test_neb2movie_wrap_default_is_bool_false():
     """main() wrap parameter default must be the boolean False, not the string 'False'."""
     from tools4vasp import neb2movie
 
-    sig = inspect.signature(neb2movie.main)
+    sig = inspect.signature(neb2movie.run)
     default = sig.parameters["wrap"].default
     assert default is False, \
         f"wrap default is {default!r} (type {type(default).__name__}), expected False (bool)"

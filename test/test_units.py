@@ -186,7 +186,7 @@ def test_neb2movie_wrap_is_bool():
     """The wrap parameter default must be a bool, not a string."""
     import inspect
     from tools4vasp import neb2movie
-    sig = inspect.signature(neb2movie.main)
+    sig = inspect.signature(neb2movie.run)
     default = sig.parameters["wrap"].default
     assert isinstance(default, bool), \
         f"Expected bool, got {type(default).__name__!r}"
@@ -434,7 +434,7 @@ def test_neb2movie_prefers_contcar(tmp_path):
 
     fake_atom = MagicMock()
     with patch('tools4vasp.neb2movie.io.read', return_value=fake_atom) as mock_read:
-        neb2movie.main(outFile=str(tmp_path / 'movie.xyz'), workdir=str(tmp_path))
+        neb2movie.run(outFile=str(tmp_path / 'movie.xyz'), workdir=str(tmp_path))
 
     paths = [str(call.args[0]) for call in mock_read.call_args_list]
     assert any('CONTCAR' in p for p in paths), "CONTCAR must be used for middle images"
@@ -452,7 +452,7 @@ def test_neb2movie_falls_back_to_poscar(tmp_path):
 
     fake_atom = MagicMock()
     with patch('tools4vasp.neb2movie.io.read', return_value=fake_atom) as mock_read:
-        neb2movie.main(outFile=str(tmp_path / 'movie.xyz'), workdir=str(tmp_path))
+        neb2movie.run(outFile=str(tmp_path / 'movie.xyz'), workdir=str(tmp_path))
 
     paths = [str(call.args[0]) for call in mock_read.call_args_list]
     assert all('POSCAR' in p for p in paths)
@@ -464,7 +464,7 @@ def test_neb2movie_raises_if_neither_poscar_nor_contcar(tmp_path):
     from tools4vasp import neb2movie
     (tmp_path / '01').mkdir()
     with pytest.raises(RuntimeError):
-        neb2movie.main(outFile=str(tmp_path / 'movie.xyz'), workdir=str(tmp_path))
+        neb2movie.run(outFile=str(tmp_path / 'movie.xyz'), workdir=str(tmp_path))
 
 
 # ---------------------------------------------------------------------------

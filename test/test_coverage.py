@@ -122,7 +122,7 @@ def test_vaspcheck_main_runs(tmp_path):
     mock_calc.read_convergence.return_value = True
     with patch("tools4vasp.vaspcheck.Vasp", return_value=mock_calc), \
          patch("tools4vasp.vaspcheck.check_vasp_electronic_entropy", return_value=None):
-        vaspcheck.main(str(tmp_path))
+        vaspcheck.run(str(tmp_path))
 
 
 def test_vaspcheck_main_convergence_failed(tmp_path):
@@ -133,7 +133,7 @@ def test_vaspcheck_main_convergence_failed(tmp_path):
     with patch("tools4vasp.vaspcheck.Vasp", return_value=mock_calc), \
          patch("tools4vasp.vaspcheck.check_vasp_electronic_entropy", return_value=None), \
          patch("builtins.print") as mock_print:
-        vaspcheck.main(str(tmp_path))
+        vaspcheck.run(str(tmp_path))
     printed = " ".join(str(c) for c in mock_print.call_args_list)
     assert "converge" in printed.lower() or "SCF" in printed
 
@@ -145,7 +145,7 @@ def test_vaspcheck_main_entropy_problem(tmp_path):
     with patch("tools4vasp.vaspcheck.Vasp", return_value=mock_calc), \
          patch("tools4vasp.vaspcheck.check_vasp_electronic_entropy", return_value="Entropy per atom is 0.5eV"), \
          patch("builtins.print") as mock_print:
-        vaspcheck.main(str(tmp_path))
+        vaspcheck.run(str(tmp_path))
     printed = " ".join(str(c) for c in mock_print.call_args_list)
     assert "Entropy" in printed or "entropy" in printed.lower()
 
@@ -299,7 +299,8 @@ def test_add_modecar_main(tmp_path, monkeypatch):
     fake_atoms.write = fake_write
 
     with patch("tools4vasp.add_MODECAR.io.read", return_value=fake_atoms), \
-         patch("tools4vasp.add_MODECAR.np.loadtxt", return_value=np.array([[1.0, 0.0, 0.0]])):
+         patch("tools4vasp.add_MODECAR.np.loadtxt", return_value=np.array([[1.0, 0.0, 0.0]])), \
+         patch("sys.argv", ["add-MODECAR"]):
         add_MODECAR.main()
 
     assert len(written) == 2
@@ -311,7 +312,7 @@ def test_add_modecar_main(tmp_path, monkeypatch):
 
 def test_vasp2traj_raises_for_missing_input(tmp_path):
     """main() must raise ValueError when an input file does not exist."""
-    from tools4vasp.vasp2traj import main
+    from tools4vasp.vasp2traj import run as main
     outfile = str(tmp_path / "out.xyz")
     with pytest.raises(ValueError, match="does not exist"):
         main(outfile, [str(tmp_path / "nonexistent.xml")], wrap=False)
@@ -319,7 +320,7 @@ def test_vasp2traj_raises_for_missing_input(tmp_path):
 
 def test_vasp2traj_backs_up_existing_output(tmp_path):
     """main() must rename existing output file to *.bak."""
-    from tools4vasp.vasp2traj import main
+    from tools4vasp.vasp2traj import run as main
 
     outfile = tmp_path / "traj.xyz"
     outfile.write_text("old content")
@@ -335,7 +336,7 @@ def test_vasp2traj_backs_up_existing_output(tmp_path):
 
 def test_vasp2traj_xdatcar_format(tmp_path):
     """main() must use format='vasp-xdatcar' for XDATCAR files."""
-    from tools4vasp.vasp2traj import main
+    from tools4vasp.vasp2traj import run as main
 
     infile = tmp_path / "XDATCAR"
     infile.write_text("dummy")
@@ -350,7 +351,7 @@ def test_vasp2traj_xdatcar_format(tmp_path):
 
 def test_vasp2traj_vasp_out_format(tmp_path):
     """main() must use format='vasp-out' for non-XDATCAR files."""
-    from tools4vasp.vasp2traj import main
+    from tools4vasp.vasp2traj import run as main
 
     infile = tmp_path / "OUTCAR"
     infile.write_text("dummy")
@@ -365,7 +366,7 @@ def test_vasp2traj_vasp_out_format(tmp_path):
 
 def test_vasp2traj_wrap_calls_frame_wrap(tmp_path):
     """main() must call frame.wrap() when wrap=True."""
-    from tools4vasp.vasp2traj import main
+    from tools4vasp.vasp2traj import run as main
 
     infile = tmp_path / "OUTCAR"
     infile.write_text("dummy")
@@ -397,7 +398,8 @@ def test_freq2jmol_main(tmp_path, monkeypatch):
     mock_calc = MagicMock()
     mock_calc.get_vibrations.return_value = mock_vibs
 
-    with patch("tools4vasp.freq2jmol.Vasp", return_value=mock_calc):
+    with patch("tools4vasp.freq2jmol.Vasp", return_value=mock_calc), \
+         patch("sys.argv", ["freq2jmol"]):
         freq2jmol.main()
 
     mock_vibs.write_jmol.assert_called_once()
@@ -461,7 +463,7 @@ def test_bash_wrapper_main_calls_correct_script(module_name, script_fragment):
 # ===========================================================================
 
 def _make_neb_loadtxt(n_spline=20, n_images=5):
-    """Return a side_effect for np.loadtxt matching plotNEB.main() calls."""
+    """Return a side_effect for np.loadtxt matching plotNEB.run() calls."""
     spline = np.column_stack([
         np.arange(n_spline),
         np.linspace(0, 1, n_spline),
@@ -477,7 +479,7 @@ def _make_neb_loadtxt(n_spline=20, n_images=5):
 
 
 def test_plotNEB_main_basic(tmp_path, monkeypatch):
-    """plotNEB.main() must complete without error for a basic NEB dataset."""
+    """plotNEB.run() must complete without error for a basic NEB dataset."""
     from tools4vasp import plotNEB
     monkeypatch.chdir(tmp_path)
     (tmp_path / "spline.dat").write_text("dummy")
@@ -486,11 +488,11 @@ def test_plotNEB_main_basic(tmp_path, monkeypatch):
     loadtxt_returns = _make_neb_loadtxt()
     with patch("tools4vasp.plotNEB.np.loadtxt", side_effect=loadtxt_returns), \
          patch("tools4vasp.plotNEB.plt"):
-        plotNEB.main(filename=str(tmp_path / "out.png"))
+        plotNEB.run(filename=str(tmp_path / "out.png"))
 
 
 def test_plotNEB_main_unit_kj_mol(tmp_path, monkeypatch):
-    """plotNEB.main() must handle kJ/mol unit conversion."""
+    """plotNEB.run() must handle kJ/mol unit conversion."""
     from tools4vasp import plotNEB
     monkeypatch.chdir(tmp_path)
     (tmp_path / "spline.dat").write_text("dummy")
@@ -499,11 +501,11 @@ def test_plotNEB_main_unit_kj_mol(tmp_path, monkeypatch):
     loadtxt_returns = _make_neb_loadtxt()
     with patch("tools4vasp.plotNEB.np.loadtxt", side_effect=loadtxt_returns), \
          patch("tools4vasp.plotNEB.plt"):
-        plotNEB.main(filename=str(tmp_path / "out.png"), unit="kJ/mol")
+        plotNEB.run(filename=str(tmp_path / "out.png"), unit="kJ/mol")
 
 
 def test_plotNEB_main_presentation_mode(tmp_path, monkeypatch):
-    """plotNEB.main() must not raise in presentation mode."""
+    """plotNEB.run() must not raise in presentation mode."""
     from tools4vasp import plotNEB
     monkeypatch.chdir(tmp_path)
     (tmp_path / "spline.dat").write_text("dummy")
@@ -512,11 +514,11 @@ def test_plotNEB_main_presentation_mode(tmp_path, monkeypatch):
     loadtxt_returns = _make_neb_loadtxt()
     with patch("tools4vasp.plotNEB.np.loadtxt", side_effect=loadtxt_returns), \
          patch("tools4vasp.plotNEB.plt"):
-        plotNEB.main(filename=str(tmp_path / "out.png"), presentation=True)
+        plotNEB.run(filename=str(tmp_path / "out.png"), presentation=True)
 
 
 def test_plotNEB_main_plot_all(tmp_path, monkeypatch):
-    """plotNEB.main() with plot_all=True must create per-image plots."""
+    """plotNEB.run() with plot_all=True must create per-image plots."""
     from tools4vasp import plotNEB
     monkeypatch.chdir(tmp_path)
     (tmp_path / "spline.dat").write_text("dummy")
@@ -525,7 +527,7 @@ def test_plotNEB_main_plot_all(tmp_path, monkeypatch):
     loadtxt_returns = _make_neb_loadtxt(n_images=3)
     with patch("tools4vasp.plotNEB.np.loadtxt", side_effect=loadtxt_returns), \
          patch("tools4vasp.plotNEB.plt"):
-        plotNEB.main(filename=str(tmp_path / "out.png"), plot_all=True)
+        plotNEB.run(filename=str(tmp_path / "out.png"), plot_all=True)
 
 
 def test_plotNEB_plot_with_highlight(tmp_path, neb_data):
@@ -546,7 +548,7 @@ def test_plotNEB_plot_with_dispersion(tmp_path, neb_data):
 
 
 def test_plotNEB_main_load_dispersion(tmp_path, monkeypatch):
-    """plotNEB.main() must load dispersion from json when load_dispersion is set."""
+    """plotNEB.run() must load dispersion from json when load_dispersion is set."""
     import json
     from tools4vasp import plotNEB
     monkeypatch.chdir(tmp_path)
@@ -559,7 +561,7 @@ def test_plotNEB_main_load_dispersion(tmp_path, monkeypatch):
     loadtxt_returns = _make_neb_loadtxt(n_images=n_images)
     with patch("tools4vasp.plotNEB.np.loadtxt", side_effect=loadtxt_returns), \
          patch("tools4vasp.plotNEB.plt"):
-        plotNEB.main(
+        plotNEB.run(
             filename=str(tmp_path / "out.png"),
             plot_dispersion=True,
             load_dispersion=str(disp_file),
@@ -987,7 +989,7 @@ def test_neb2movie_explicit_use_poscar(tmp_path):
 
     fake_atom = MagicMock()
     with patch("tools4vasp.neb2movie.io.read", return_value=fake_atom) as mock_read:
-        neb2movie.main(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), use="POSCAR")
+        neb2movie.run(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), use="POSCAR")
 
     paths = [str(c.args[0]) for c in mock_read.call_args_list]
     assert not any("CONTCAR" in p for p in paths)
@@ -1005,7 +1007,7 @@ def test_neb2movie_explicit_use_contcar(tmp_path):
 
     fake_atom = MagicMock()
     with patch("tools4vasp.neb2movie.io.read", return_value=fake_atom) as mock_read:
-        neb2movie.main(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), use="CONTCAR")
+        neb2movie.run(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), use="CONTCAR")
 
     paths = [str(c.args[0]) for c in mock_read.call_args_list]
     assert any("CONTCAR" in p for p in paths)
@@ -1024,7 +1026,7 @@ def test_neb2movie_backs_up_existing_outfile(tmp_path):
 
     fake_atom = MagicMock()
     with patch("tools4vasp.neb2movie.io.read", return_value=fake_atom):
-        neb2movie.main(outFile=str(outfile), workdir=str(tmp_path))
+        neb2movie.run(outFile=str(outfile), workdir=str(tmp_path))
 
     assert (tmp_path / "movie.xyz.bak").is_file()
 
@@ -1039,7 +1041,7 @@ def test_neb2movie_wrap_applies_to_frames(tmp_path):
 
     fake_atom = MagicMock()
     with patch("tools4vasp.neb2movie.io.read", return_value=fake_atom):
-        neb2movie.main(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), wrap=True)
+        neb2movie.run(outFile=str(tmp_path / "movie.xyz"), workdir=str(tmp_path), wrap=True)
 
     assert fake_atom.wrap.call_count == 3
 

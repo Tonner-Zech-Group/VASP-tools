@@ -73,9 +73,9 @@ def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, 
     plt.close()
 
 
-def main(filename='NEB.png', presentation=False,
-            highlight=None, plot_all=False, plot_dispersion=False,
-            unit='kJ/mol', load_dispersion=None):
+def run(filename='NEB.png', presentation=False,
+         highlight=None, plot_all=False, plot_dispersion=False,
+         unit='kJ/mol', load_dispersion=None):
     unitDict = create_units('2014')
     conv = unitDict['eV'] #VASP and TST use eV
     if '/' in unit:
@@ -149,14 +149,29 @@ def main(filename='NEB.png', presentation=False,
             plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, filename.format(i), lw=lw, s=s, highlight=i, dispersion=dispersion, unit=unit)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Plot VASP+TST NEB results')
-    parser.add_argument('--file', help='Plot Filename', default='NEB.png')
-    parser.add_argument('--presentation', help='Presentation Mode (i.e. thicker lines)', action='store_true')
-    parser.add_argument('--highlight', help='Circle Point N', type=int, default=None)
-    parser.add_argument('--plotall', help='Create main plot and each highlighted plot.', action='store_true')
-    parser.add_argument('--plotdispersion', help='Include dispersion contributions in plot.', action='store_true')
-    parser.add_argument('--unit', help='Set the unit used to plot, must be ase compatible.', default='kJ/mol')
-    parser.add_argument('--load-dispersion', help='Load dispersion energies from json.', type=str, default=None)
+def main():
+    """CLI entry point: parse arguments and call run()."""
+    parser = argparse.ArgumentParser(
+        description="Plot VASP+VTST NEB calculation results. "
+                    "Reads spline.dat and neb.dat from the current directory.",
+        epilog="Example: plotNEB --unit eV --file neb.png --highlight 3")
+    parser.add_argument("--file", help="Output plot filename (default: NEB.png)", default="NEB.png")
+    parser.add_argument("--presentation", help="Presentation mode: thicker lines, larger font",
+                        action="store_true")
+    parser.add_argument("--highlight", help="Draw a circle around image N", type=int, default=None)
+    parser.add_argument("--plotall", help="Save main plot plus one plot per highlighted image",
+                        action="store_true")
+    parser.add_argument("--plotdispersion", help="Include dispersion energy contributions",
+                        action="store_true")
+    parser.add_argument("--unit", help="Energy unit for the y-axis (ASE-compatible, default: kJ/mol)",
+                        default="kJ/mol")
+    parser.add_argument("--load-dispersion",
+                        help="Load dispersion energies from a JSON file instead of OUTCARs",
+                        type=str, default=None)
     args = parser.parse_args()
-    main(args.file, args.presentation, args.highlight, args.plotall, args.plotdispersion, args.unit, args.load_dispersion)
+    run(args.file, args.presentation, args.highlight, args.plotall,
+        args.plotdispersion, args.unit, args.load_dispersion)
+
+
+if __name__ == "__main__":
+    main()

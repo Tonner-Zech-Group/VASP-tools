@@ -8,7 +8,7 @@
 from ase import io
 import os
 
-def main(outFile, inFiles, wrap):
+def run(outFile, inFiles, wrap):
     #if output exists mv to .bak
     if os.path.isfile(outFile):
         print('ATTENTION: {:} exists, moving to *.bak'.format(outFile))
@@ -32,13 +32,23 @@ def main(outFile, inFiles, wrap):
 
 
 
-if __name__ == "__main__":
+def main():
+    """CLI entry point: parse arguments and call run()."""
     import argparse
-    parser = argparse.ArgumentParser(description='Convert VASP output to ASE-extxyz trajectory')
-    parser.add_argument('-w', help='Wrap structure with origin as center', action='store_const', default=False, const=True)
-    parser.add_argument('output', type=str, help='output file')
-    parser.add_argument('input', type=str, help='input xyz file(s)', nargs='*')
+    parser = argparse.ArgumentParser(
+        description="Convert VASP geometry optimisation output (OUTCAR or XDATCAR) to an "
+                    "ASE ext-xyz trajectory file.",
+        epilog="Example: vasp2traj traj.xyz OUTCAR")
+    parser.add_argument("-w", "--wrap", help="Wrap atoms with origin as center",
+                        action="store_true", default=False)
+    parser.add_argument("output", type=str, help="Output xyz trajectory file")
+    parser.add_argument("input", type=str, nargs="*",
+                        help="Input VASP file(s): OUTCAR or XDATCAR")
     args = parser.parse_args()
-    main(args.output, args.input, args.w)
+    run(args.output, args.input, args.wrap)
+
+
+if __name__ == "__main__":
+    main()
 
 

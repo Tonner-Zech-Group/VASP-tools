@@ -134,7 +134,8 @@ def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
 
 
 
-def main(path):
+def run(path):
+    """Check VASP run for proper occupations and convergence."""
     assert os.path.isdir(path), "Given path is not a directory"
     calc = Vasp(directory=path)
     ret = check_vasp_electronic_entropy(path, calc)
@@ -142,7 +143,6 @@ def main(path):
         print(ret)
         return
     print("Seems like there are no bad occupations (only last step).")
-    
 
     if not calc.read_convergence():
         print("Either SCF or GO did not converge!")
@@ -151,14 +151,18 @@ def main(path):
     return
 
 
-if __name__ == "__main__":
+def main():
+    """CLI entry point: parse arguments and call run()."""
     import argparse
     parser = argparse.ArgumentParser(
-        description='Check VASP run for proper occupations')
-    parser.add_argument(
-        'path',
-        type=str,
-        help='path to VASP files',
-        default='./')
+        description="Assert proper occupations and SCF/geometry convergence in a VASP "
+                    "calculation using ASE.",
+        epilog="Example: vaspcheck /path/to/vasp/run")
+    parser.add_argument("path", type=str, nargs="?", default="./",
+                        help="Path to VASP files (default: ./)")
     args = parser.parse_args()
-    main(args.path)
+    run(args.path)
+
+
+if __name__ == "__main__":
+    main()

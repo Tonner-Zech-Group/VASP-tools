@@ -102,12 +102,12 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description='Convert one or many CHGCAR-like files to cube format.')
     parser.add_argument('input', type=str, nargs='+', help='Input Files')
-    parser.add_argument('-output', type=str, nargs='+', help='Output File Names (no extension)')
-    parser.add_argument('-v', help='Verbose', action='store_true')
+    parser.add_argument('--output', type=str, nargs='+', help='Output file names (no extension, .cube will be appended)')
+    parser.add_argument('-v', '--verbose', help='Verbose output', action='store_true')
     parser.add_argument('--integral', help='Print Integrals', action='store_true')
     parser.add_argument('--volume', help='Multiply the Density with the Cell Volume', action='store_true')
     args = parser.parse_args()
-    chgcar2cube(args.input, args.output, verbose=args.v, return_integrals=args.integral, mult_volume=args.volume)
+    chgcar2cube(args.input, args.output, verbose=args.verbose, return_integrals=args.integral, mult_volume=args.volume)
 
 
 
