@@ -56,12 +56,40 @@ Key rules in effect: F401, F841, F811, E731, E741, E401.
 
 Bash scripts are linted by ShellCheck (via `azohra/shell-linter@latest`) in CI.
 
+## Module structure convention
+
+Every tool follows a two-function pattern:
+
+```python
+def run(arg1, arg2, ...):
+    """Importable logic — called directly in tests and by main()."""
+    ...
+
+def main():
+    """CLI entry point registered in pyproject.toml [project.scripts]."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="...",
+        epilog="Example: toolname --flag value")
+    # add arguments ...
+    args = parser.parse_args()
+    run(args.arg1, args.arg2)
+```
+
+Key points:
+- `main()` **must** contain the argparse — it is what pip installs as the CLI command.
+  Putting argparse only in `if __name__ == "__main__":` means the installed command
+  ignores all CLI arguments.
+- `run()` holds the actual logic so it can be imported and unit-tested without
+  touching `sys.argv`.
+- Tools whose `main()` uses argparse should be tested with `patch("sys.argv", [...])`.
+
 ## Adding a new tool
 
-1. Create `src/tools4vasp/<toolname>.py` with a `main()` entry-point.
+1. Create `src/tools4vasp/<toolname>.py` following the `run()`/`main()` convention above.
 2. Register it in `pyproject.toml` under `[project.scripts]`.
 3. Add tests in `test/test_coverage.py` (or a dedicated file); mock external
-   dependencies so tests run without VASP.
+   dependencies so tests run without VASP. Patch `sys.argv` when calling `main()`.
 4. Bash scripts go in `src/tools4vasp/bash_scripts/` and must pass ShellCheck.
 
 ## Branching & CI workflow
