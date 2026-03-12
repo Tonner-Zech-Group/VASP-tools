@@ -98,7 +98,21 @@ Key points:
 - CI (`python-app.yml`) triggers on **pull_request → main** and on **push → main**.
   It does **not** trigger on feature-branch pushes to avoid duplicate runs.
 - Release workflow (`release.yml`) triggers on `v*` tags and publishes to PyPI.
+- Auto-tag workflow (`tag-on-merge.yml`) triggers on **push → main**: reads
+  `version` from `pyproject.toml`, creates tag `v<version>` if it doesn't exist,
+  which in turn triggers `release.yml`. **Merging a PR automatically produces a
+  release** — bump the version in `pyproject.toml` (and `CITATION.cff`) before
+  merging whenever a release is intended. If the tag already exists, no release
+  is created (safe for hotfixes merged without a version bump).
 - TestPyPI publish (`pypi-publish.yml`) is manual (`workflow_dispatch` only).
+
+### Releasing a new version
+
+1. In the feature branch, bump `version` in `pyproject.toml` and `CITATION.cff`
+   (also update `date-released` in `CITATION.cff`).
+2. Merge the PR to `main`.
+3. `tag-on-merge.yml` creates tag `v<version>` → `release.yml` runs tests,
+   builds the wheel, creates a GitHub Release, and publishes to PyPI.
 
 ## Key dependencies
 
