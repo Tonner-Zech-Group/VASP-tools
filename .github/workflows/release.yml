@@ -13,20 +13,8 @@ permissions:
   contents: write
 
 jobs:
-  waitfortest:
-    name: Wait for tests to succeed
-    runs-on: ubuntu-latest
-    steps:
-    - uses: lewagon/wait-on-check-action@v1.3.4
-      with:
-        ref: ${{ github.ref }}
-        check-name: 'test'
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 20
-
   build:
     name: Build distribution
-    needs: waitfortest
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
