@@ -1,6 +1,6 @@
-# This workflow uploads a Python Package to TestPyPI on manual trigger
+# Manually publish a Python package to TestPyPI (trusted publisher, no token needed)
 
-name: Upload Python Package
+name: Upload Python Package to TestPyPI
 
 on:
   workflow_dispatch:
@@ -9,20 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  waitfortest:
-    name: Wait for tests to succeed
-    runs-on: ubuntu-latest
-    steps:
-    - uses: lewagon/wait-on-check-action@v1.3.4
-      with:
-        ref: ${{ github.ref }}
-        check-name: 'test'
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 20
-
   build:
     name: Build distribution
-    needs: waitfortest
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -31,11 +19,7 @@ jobs:
       with:
         python-version: "3.x"
     - name: Install pypa/build
-      run: >-
-        python3 -m
-        pip install
-        build
-        --user
+      run: python3 -m pip install build --user
     - name: Build a binary wheel and a source tarball
       run: python3 -m build
     - name: Store the distribution packages
@@ -53,7 +37,7 @@ jobs:
       name: testpypi
       url: https://test.pypi.org/p/tools4vasp
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      id-token: write  # required for OIDC trusted publishing
     steps:
     - name: Download all the dists
       uses: actions/download-artifact@v4
@@ -64,6 +48,3 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-
-
