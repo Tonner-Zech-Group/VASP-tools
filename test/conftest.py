@@ -123,6 +123,19 @@ POTCAR: PAW_PBE Si 05Jan2001
 POSCAR: Si
 """
 
+# VASP 5.x style: lines have a leading space (real-world format seen in the field).
+_POTCAR_POSCAR_HEADER_LEADING_SPACE = """\
+ POTCAR:    PAW_PBE Si 05Jan2001
+ POTCAR:    PAW_PBE H 15Jun2001
+ POTCAR:    PAW_PBE O 08Apr2002
+ POTCAR:    PAW_PBE C 08Apr2002
+ POTCAR:    PAW_PBE Si 05Jan2001
+ POTCAR:    PAW_PBE H 15Jun2001
+ POTCAR:    PAW_PBE O 08Apr2002
+ POTCAR:    PAW_PBE C 08Apr2002
+ POSCAR: Si  H  O  C
+"""
+
 # PAW potential with suffix (_pv): should still compare equal to plain symbol.
 _POTCAR_POSCAR_HEADER_PAW_SUFFIX = """\
 POTCAR: PAW_PBE K_pv 06Sep2000

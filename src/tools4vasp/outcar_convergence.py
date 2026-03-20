@@ -105,10 +105,11 @@ def _parse_potcar_poscar_elements(text: str) -> Tuple[List[str], List[str]]:
     poscar_elements: List[str] = []
 
     for line in text.splitlines():
-        if line.startswith('POTCAR:'):
-            potcar_lines.append(line)
-        elif line.startswith('POSCAR:'):
-            poscar_elements = line.split(':', 1)[1].strip().split()
+        stripped = line.strip()
+        if stripped.startswith('POTCAR:'):
+            potcar_lines.append(stripped)
+        elif stripped.startswith('POSCAR:'):
+            poscar_elements = stripped.split(':', 1)[1].strip().split()
             break  # POSCAR line appears after all POTCAR lines
 
     if not potcar_lines:
