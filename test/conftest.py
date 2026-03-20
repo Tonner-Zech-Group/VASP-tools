@@ -46,6 +46,51 @@ asdfasdf
 
 
 # ---------------------------------------------------------------------------
+# Minimal OUTCAR fragments for outcar_convergence tests
+# ---------------------------------------------------------------------------
+
+# One ionic step whose SCF converged; ionic relaxation also converged.
+OUTCAR_ONE_STEP_CONVERGED = """\
+ ----------------------------------------- Iteration    1(   1) -----------------------------------------
+ DAV:   1    -0.100000E+03   some data
+ DAV:   2    -0.101000E+03   some data
+       reached required accuracy - stopping SCF-cycle
+       reached required accuracy - stopping structural energy minimisation
+"""
+
+# One ionic step whose SCF did NOT converge (hit NELM); no ionic convergence.
+OUTCAR_ONE_STEP_SCF_FAILED = """\
+ ----------------------------------------- Iteration    1(   1) -----------------------------------------
+ DAV:   1    -0.100000E+03   some data
+ DAV:   2    -0.100100E+03   some data
+"""
+
+# Three ionic steps: steps 1 and 3 SCF-converged, step 2 SCF-failed.
+# No ionic convergence (geometry did not finish).
+OUTCAR_MULTI_STEP_PARTIAL = """\
+ ----------------------------------------- Iteration    1(   1) -----------------------------------------
+ DAV:   1    -0.100000E+03   some data
+       reached required accuracy - stopping SCF-cycle
+ ----------------------------------------- Iteration    2(   1) -----------------------------------------
+ DAV:   1    -0.101000E+03   some data
+ ----------------------------------------- Iteration    3(   1) -----------------------------------------
+ DAV:   1    -0.102000E+03   some data
+       reached required accuracy - stopping SCF-cycle
+"""
+
+# Two ionic steps both SCF-converged; ionic relaxation converged.
+OUTCAR_MULTI_STEP_CONVERGED = """\
+ ----------------------------------------- Iteration    1(   1) -----------------------------------------
+ DAV:   1    -0.100000E+03   some data
+       reached required accuracy - stopping SCF-cycle
+ ----------------------------------------- Iteration    2(   1) -----------------------------------------
+ DAV:   1    -0.101000E+03   some data
+       reached required accuracy - stopping SCF-cycle
+       reached required accuracy - stopping structural energy minimisation
+"""
+
+
+# ---------------------------------------------------------------------------
 # pytest fixtures
 # ---------------------------------------------------------------------------
 
