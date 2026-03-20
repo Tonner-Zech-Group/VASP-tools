@@ -7,16 +7,24 @@ import pytest
 
 from tools4vasp.outcar_convergence import (
     _find_outcar,
+    _parse_potcar_poscar_elements,
     check_ionic_convergence,
     check_outcar,
+    check_potcar_poscar_alignment,
     check_scf_convergence_per_step,
     run,
 )
 from conftest import (
+    OUTCAR_ALIGNED_CONVERGED,
+    OUTCAR_MISMATCHED_CONVERGED,
     OUTCAR_MULTI_STEP_CONVERGED,
     OUTCAR_MULTI_STEP_PARTIAL,
     OUTCAR_ONE_STEP_CONVERGED,
     OUTCAR_ONE_STEP_SCF_FAILED,
+    _POTCAR_POSCAR_HEADER_ALIGNED,
+    _POTCAR_POSCAR_HEADER_MISMATCHED,
+    _POTCAR_POSCAR_HEADER_PAW_SUFFIX,
+    _POTCAR_POSCAR_HEADER_SINGLE,
 )
 
 
@@ -139,11 +147,12 @@ class TestCheckIonicConvergence:
 
 class TestCheckOutcar:
     def test_returns_correct_keys(self, tmp_path):
-        p = _write_outcar(tmp_path, OUTCAR_ONE_STEP_CONVERGED)
+        p = _write_outcar(tmp_path, OUTCAR_ALIGNED_CONVERGED)
         result = check_outcar(p)
         assert set(result.keys()) == {
-            'outcar_path', 'n_steps', 'scf_converged',
-            'n_scf_failed', 'ionic_converged'
+            'outcar_path', 'potcar_aligned', 'potcar_message',
+            'poscar_elements', 'potcar_elements',
+            'n_steps', 'scf_converged', 'n_scf_failed', 'ionic_converged',
         }
 
     def test_converged_single_step(self, tmp_path):
@@ -199,6 +208,104 @@ class TestCheckOutcar:
         result = check_outcar(p)
         # Step 2 failed, steps 1 and 3 converged
         assert result['n_scf_failed'] == 1
+
+
+# ---------------------------------------------------------------------------
+# _parse_potcar_poscar_elements  (unit tests on raw text)
+# ---------------------------------------------------------------------------
+
+class TestParsePotcarPoscarElements:
+    def test_aligned_multi_element(self):
+        poscar, potcar = _parse_potcar_poscar_elements(_POTCAR_POSCAR_HEADER_ALIGNED)
+        assert poscar == ['Si', 'H', 'C']
+        assert potcar == ['Si', 'H', 'C']
+
+    def test_mismatched_returns_different_lists(self):
+        poscar, potcar = _parse_potcar_poscar_elements(_POTCAR_POSCAR_HEADER_MISMATCHED)
+        assert poscar == ['Si', 'H', 'C']
+        assert potcar == ['Si', 'C', 'H']
+
+    def test_single_element_no_doubling(self):
+        poscar, potcar = _parse_potcar_poscar_elements(_POTCAR_POSCAR_HEADER_SINGLE)
+        assert poscar == ['Si']
+        assert potcar == ['Si']
+
+    def test_paw_suffix_stripped(self):
+        poscar, potcar = _parse_potcar_poscar_elements(_POTCAR_POSCAR_HEADER_PAW_SUFFIX)
+        assert poscar == ['K', 'O']
+        assert potcar == ['K', 'O']
+
+    def test_missing_potcar_raises(self):
+        with pytest.raises(ValueError, match="POTCAR"):
+            _parse_potcar_poscar_elements("POSCAR: Si H\n")
+
+    def test_missing_poscar_raises(self):
+        with pytest.raises(ValueError, match="POSCAR"):
+            _parse_potcar_poscar_elements("POTCAR: PAW_PBE Si 05Jan2001\n")
+
+
+# ---------------------------------------------------------------------------
+# check_potcar_poscar_alignment
+# ---------------------------------------------------------------------------
+
+class TestCheckPotcarPoscarAlignment:
+    def test_aligned_returns_true(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_ALIGNED_CONVERGED)
+        result = check_potcar_poscar_alignment(p)
+        assert result['aligned'] is True
+        assert result['message'] == 'OK'
+        assert result['poscar_elements'] == ['Si', 'H', 'C']
+        assert result['potcar_elements'] == ['Si', 'H', 'C']
+
+    def test_mismatched_returns_false(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_MISMATCHED_CONVERGED)
+        result = check_potcar_poscar_alignment(p)
+        assert result['aligned'] is False
+        assert 'MISMATCH' in result['message']
+        assert result['poscar_elements'] == ['Si', 'H', 'C']
+        assert result['potcar_elements'] == ['Si', 'C', 'H']
+
+    def test_gz_file_transparent(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_ALIGNED_CONVERGED, 'OUTCAR.gz')
+        result = check_potcar_poscar_alignment(p)
+        assert result['aligned'] is True
+
+    def test_returns_required_keys(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_ALIGNED_CONVERGED)
+        result = check_potcar_poscar_alignment(p)
+        assert set(result.keys()) == {'aligned', 'poscar_elements', 'potcar_elements', 'message'}
+
+
+# ---------------------------------------------------------------------------
+# check_outcar — alignment keys now included
+# ---------------------------------------------------------------------------
+
+class TestCheckOutcarAlignment:
+    def test_aligned_key_present(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_ALIGNED_CONVERGED)
+        result = check_outcar(p)
+        assert 'potcar_aligned' in result
+        assert 'potcar_message' in result
+        assert 'poscar_elements' in result
+        assert 'potcar_elements' in result
+
+    def test_aligned_value_true(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_ALIGNED_CONVERGED)
+        result = check_outcar(p)
+        assert result['potcar_aligned'] is True
+        assert result['potcar_message'] == 'OK'
+
+    def test_mismatched_value_false(self, tmp_path):
+        p = _write_outcar(tmp_path, OUTCAR_MISMATCHED_CONVERGED)
+        result = check_outcar(p)
+        assert result['potcar_aligned'] is False
+        assert 'MISMATCH' in result['potcar_message']
+
+    def test_no_header_gives_none(self, tmp_path):
+        # Header-less OUTCAR (e.g. truncated file) → potcar_aligned is None
+        p = _write_outcar(tmp_path, OUTCAR_ONE_STEP_CONVERGED)
+        result = check_outcar(p)
+        assert result['potcar_aligned'] is None
 
 
 # ---------------------------------------------------------------------------

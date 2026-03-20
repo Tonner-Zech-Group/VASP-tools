@@ -89,6 +89,57 @@ OUTCAR_MULTI_STEP_CONVERGED = """\
        reached required accuracy - stopping structural energy minimisation
 """
 
+# ---------------------------------------------------------------------------
+# OUTCAR header fragments for POTCAR/POSCAR alignment tests
+# ---------------------------------------------------------------------------
+
+# VASP writes POTCAR titles first (each element listed twice: header + footer),
+# then the POSCAR element line.  Minimal realistic header for Si+H+C:
+
+_POTCAR_POSCAR_HEADER_ALIGNED = """\
+POTCAR: PAW_PBE Si 05Jan2001
+POTCAR: PAW_PBE H  15Jun2001
+POTCAR: PAW_PBE C  08Apr2002
+POTCAR: PAW_PBE Si 05Jan2001
+POTCAR: PAW_PBE H  15Jun2001
+POTCAR: PAW_PBE C  08Apr2002
+POSCAR: Si H C
+"""
+
+# Same but POTCAR order is Si C H while POSCAR says Si H C — mismatch.
+_POTCAR_POSCAR_HEADER_MISMATCHED = """\
+POTCAR: PAW_PBE Si 05Jan2001
+POTCAR: PAW_PBE C  08Apr2002
+POTCAR: PAW_PBE H  15Jun2001
+POTCAR: PAW_PBE Si 05Jan2001
+POTCAR: PAW_PBE C  08Apr2002
+POTCAR: PAW_PBE H  15Jun2001
+POSCAR: Si H C
+"""
+
+# Single-element calculation (only one POTCAR line — no "doubled" header).
+_POTCAR_POSCAR_HEADER_SINGLE = """\
+POTCAR: PAW_PBE Si 05Jan2001
+POSCAR: Si
+"""
+
+# PAW potential with suffix (_pv): should still compare equal to plain symbol.
+_POTCAR_POSCAR_HEADER_PAW_SUFFIX = """\
+POTCAR: PAW_PBE K_pv 06Sep2000
+POTCAR: PAW_PBE O  08Apr2002
+POTCAR: PAW_PBE K_pv 06Sep2000
+POTCAR: PAW_PBE O  08Apr2002
+POSCAR: K O
+"""
+
+# Full minimal OUTCARs combining a header with convergence body.
+OUTCAR_ALIGNED_CONVERGED = (
+    _POTCAR_POSCAR_HEADER_ALIGNED + OUTCAR_ONE_STEP_CONVERGED
+)
+OUTCAR_MISMATCHED_CONVERGED = (
+    _POTCAR_POSCAR_HEADER_MISMATCHED + OUTCAR_ONE_STEP_CONVERGED
+)
+
 
 # ---------------------------------------------------------------------------
 # pytest fixtures
