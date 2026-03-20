@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check SCF and ionic convergence of a VASP calculation from its OUTCAR.
+"""Check SCF/ionic convergence and POTCAR/POSCAR alignment from a VASP OUTCAR.
 
 Unlike vaspcheck (which requires a full VASP directory and only inspects the
 final step via ASE's Vasp calculator), this module reads the raw OUTCAR text
@@ -13,6 +13,8 @@ Typical use cases
   and forces and should be excluded.
 - Verify that a final geometry, TS geometry, or converged NEB image is genuinely
   converged before accepting it as a reference structure.
+- Catch accidental POTCAR/POSCAR element-order mismatches that silently corrupt
+  energies and forces.
 
 CLI usage
 ---------
@@ -25,7 +27,7 @@ CLI usage
 import gzip
 import os
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # VASP OUTCAR convergence strings (stable across VASP 5.x and 6.x)
 _SCF_CONVERGED_STR   = "reached required accuracy - stopping SCF-cycle"
@@ -64,6 +66,116 @@ def _find_outcar(path: str) -> Optional[str]:
             if os.path.isfile(candidate):
                 return candidate
     return None
+
+
+def _parse_potcar_poscar_elements(text: str) -> Tuple[List[str], List[str]]:
+    """Parse element lists from the OUTCAR header.
+
+    VASP echoes the POTCAR titles and the POSCAR element line near the top of
+    every OUTCAR.  The POTCAR block appears first (each element written twice —
+    once at the start and once at the end of the run), followed by the POSCAR
+    line.  Example::
+
+        POTCAR: PAW_PBE Si 05Jan2001
+        POTCAR: PAW_PBE H  15Jun2001
+        POTCAR: PAW_PBE C  08Apr2002
+        ...
+        POSCAR: Si H C
+
+    PAW potential suffixes (_pv, _d, _sv, …) are stripped so that e.g.
+    ``K_pv`` compares equal to ``K``.
+
+    Parameters
+    ----------
+    text : str
+        Full text of an OUTCAR file.
+
+    Returns
+    -------
+    (poscar_elements, potcar_elements) : Tuple[List[str], List[str]]
+        Element symbols in the order declared by POSCAR and POTCAR
+        respectively.
+
+    Raises
+    ------
+    ValueError
+        If the POTCAR or POSCAR element lines cannot be found in the text.
+    """
+    potcar_lines = []
+    poscar_elements: List[str] = []
+
+    for line in text.splitlines():
+        if line.startswith('POTCAR:'):
+            potcar_lines.append(line)
+        elif line.startswith('POSCAR:'):
+            poscar_elements = line.split(':', 1)[1].strip().split()
+            break  # POSCAR line appears after all POTCAR lines
+
+    if not potcar_lines:
+        raise ValueError("No 'POTCAR:' lines found in OUTCAR — file may be truncated.")
+    if not poscar_elements:
+        raise ValueError("No 'POSCAR:' line found in OUTCAR — file may be truncated.")
+
+    # VASP prints each POTCAR entry twice (header + footer); keep first half.
+    n = len(potcar_lines)
+    if n > 1 and n % 2 == 0:
+        potcar_lines = potcar_lines[:n // 2]
+
+    # Extract element symbol (second whitespace-delimited token after "PAW_PBE")
+    # e.g. "POTCAR: PAW_PBE Si_pv 05Jan2001" → "Si"
+    potcar_elements = []
+    for line in potcar_lines:
+        parts = line.split(':', 1)[1].strip().split()
+        # parts[0] is the functional (PAW_PBE / PAW_LDA / …), parts[1] is element
+        if len(parts) < 2:
+            raise ValueError(f"Cannot parse element from POTCAR line: {line!r}")
+        sym = parts[1].split('_')[0]  # strip _pv, _d, _sv, …
+        potcar_elements.append(sym)
+
+    # Strip PAW suffixes from POSCAR elements too (defensive)
+    poscar_elements = [e.split('_')[0] for e in poscar_elements]
+
+    return poscar_elements, potcar_elements
+
+
+def check_potcar_poscar_alignment(outcar_path: str) -> dict:
+    """Check that the POTCAR element order matches the POSCAR element order.
+
+    A mismatch means VASP applied the wrong pseudopotential to each species,
+    producing silently wrong energies and forces.  This is one of the most
+    common setup mistakes when reusing input files across systems.
+
+    Parameters
+    ----------
+    outcar_path : str
+        Path to an OUTCAR or OUTCAR.gz file.
+
+    Returns
+    -------
+    dict with keys:
+        aligned         : bool       — True if POTCAR and POSCAR orders match
+        poscar_elements : List[str]  — element symbols from the POSCAR line
+        potcar_elements : List[str]  — element symbols from the POTCAR lines
+        message         : str        — human-readable status or mismatch detail
+
+    Raises
+    ------
+    ValueError
+        If the POTCAR or POSCAR element lines cannot be parsed.
+    """
+    text = _read_outcar_text(outcar_path)
+    poscar_elems, potcar_elems = _parse_potcar_poscar_elements(text)
+    aligned = poscar_elems == potcar_elems
+    if aligned:
+        message = "OK"
+    else:
+        message = (f"MISMATCH — POSCAR: {poscar_elems}  POTCAR: {potcar_elems}")
+    return {
+        'aligned':         aligned,
+        'poscar_elements': poscar_elems,
+        'potcar_elements': potcar_elems,
+        'message':         message,
+    }
 
 
 def check_scf_convergence_per_step(outcar_path: str) -> List[bool]:
@@ -141,11 +253,15 @@ def check_outcar(path: str) -> dict:
     Returns
     -------
     dict with keys:
-        outcar_path     : str        — resolved OUTCAR file path used
-        n_steps         : int        — number of ionic steps found
-        scf_converged   : List[bool] — per-step SCF convergence flags
-        n_scf_failed    : int        — number of steps where SCF did not converge
-        ionic_converged : bool       — True if ionic/geometry relaxation converged
+        outcar_path      : str             — resolved OUTCAR file path used
+        potcar_aligned   : bool or None   — True=OK, False=mismatch, None=header absent
+        potcar_message   : str            — "OK", mismatch detail, or reason not checked
+        poscar_elements  : List[str]  — elements declared in POSCAR line
+        potcar_elements  : List[str]  — elements declared in POTCAR lines
+        n_steps          : int        — number of ionic steps found
+        scf_converged    : List[bool] — per-step SCF convergence flags
+        n_scf_failed     : int        — number of steps where SCF did not converge
+        ionic_converged  : bool       — True if ionic/geometry relaxation converged
 
     Raises
     ------
@@ -156,15 +272,28 @@ def check_outcar(path: str) -> dict:
     if outcar is None:
         raise FileNotFoundError(f"No OUTCAR or OUTCAR.gz found at: {path}")
 
+    try:
+        alignment = check_potcar_poscar_alignment(outcar)
+    except ValueError as exc:
+        alignment = {
+            'aligned':         None,
+            'poscar_elements': [],
+            'potcar_elements': [],
+            'message':         f"Could not check alignment: {exc}",
+        }
     scf = check_scf_convergence_per_step(outcar)
     ionic = check_ionic_convergence(outcar)
 
     return {
-        'outcar_path':     outcar,
-        'n_steps':         len(scf),
-        'scf_converged':   scf,
-        'n_scf_failed':    sum(1 for ok in scf if not ok),
-        'ionic_converged': ionic,
+        'outcar_path':      outcar,
+        'potcar_aligned':   alignment['aligned'],
+        'potcar_message':   alignment['message'],
+        'poscar_elements':  alignment['poscar_elements'],
+        'potcar_elements':  alignment['potcar_elements'],
+        'n_steps':          len(scf),
+        'scf_converged':    scf,
+        'n_scf_failed':     sum(1 for ok in scf if not ok),
+        'ionic_converged':  ionic,
     }
 
 
@@ -182,6 +311,10 @@ def run(path: str = '.') -> dict:
     """
     result = check_outcar(path)
     print(f"OUTCAR      : {result['outcar_path']}")
+    alignment_str = result['potcar_message']
+    if result['potcar_aligned'] is None:
+        alignment_str = f"UNKNOWN ({result['potcar_message']})"
+    print(f"POTCAR/POSCAR alignment : {alignment_str}")
     print(f"Ionic steps : {result['n_steps']}")
     if result['n_scf_failed'] == 0:
         print("SCF         : all steps converged")
