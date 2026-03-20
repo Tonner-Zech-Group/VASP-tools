@@ -22,6 +22,7 @@ from conftest import (
     OUTCAR_ONE_STEP_CONVERGED,
     OUTCAR_ONE_STEP_SCF_FAILED,
     _POTCAR_POSCAR_HEADER_ALIGNED,
+    _POTCAR_POSCAR_HEADER_LEADING_SPACE,
     _POTCAR_POSCAR_HEADER_MISMATCHED,
     _POTCAR_POSCAR_HEADER_PAW_SUFFIX,
     _POTCAR_POSCAR_HEADER_SINGLE,
@@ -234,6 +235,12 @@ class TestParsePotcarPoscarElements:
         poscar, potcar = _parse_potcar_poscar_elements(_POTCAR_POSCAR_HEADER_PAW_SUFFIX)
         assert poscar == ['K', 'O']
         assert potcar == ['K', 'O']
+
+    def test_leading_space_vasp5_format(self):
+        # Real-world VASP 5.x OUTCARs indent POTCAR/POSCAR lines with a space
+        poscar, potcar = _parse_potcar_poscar_elements(_POTCAR_POSCAR_HEADER_LEADING_SPACE)
+        assert poscar == ['Si', 'H', 'O', 'C']
+        assert potcar == ['Si', 'H', 'O', 'C']
 
     def test_missing_potcar_raises(self):
         with pytest.raises(ValueError, match="POTCAR"):
