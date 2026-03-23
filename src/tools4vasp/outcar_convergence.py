@@ -29,15 +29,24 @@ import os
 import re
 from typing import List, Optional, Tuple
 
-# VASP OUTCAR convergence strings (stable across VASP 5.x and 6.x)
-_SCF_CONVERGED_STR   = "reached required accuracy - stopping SCF-cycle"
+# VASP OUTCAR SCF convergence strings.
+# VASP 5.x writes "aborting loop because EDIFF is reached".
+# VASP 6.x writes "reached required accuracy - stopping SCF-cycle".
+# Both are checked so the module works across VASP versions.
+_SCF_CONVERGED_STRS = (
+    "aborting loop because EDIFF is reached",   # VASP 5.x
+    "reached required accuracy - stopping SCF-cycle",  # VASP 6.x
+)
+
+# Ionic convergence string (identical across VASP 5.x and 6.x).
 _IONIC_CONVERGED_STR = ("reached required accuracy - stopping structural "
                         "energy minimisation")
 
 # Matches the first SCF iteration of a new ionic step:
-#   " ---- Iteration    N(   1) ----"
-# The leading dashes vary in length but are always at least 38 characters.
-_ITER_STEP_RE = re.compile(r'^ -{38,} Iteration\s+\d+\(\s*1\s*\)')
+#   "------- Iteration    N(   1) -------"  (VASP 5.x — no leading space)
+#   " ------ Iteration    N(   1) ------"   (some builds — one leading space)
+# Leading whitespace is optional; dashes are always at least 38 characters.
+_ITER_STEP_RE = re.compile(r'^\s*-{38,} Iteration\s+\d+\(\s*1\s*\)')
 
 
 def _read_outcar_text(path: str) -> str:
@@ -212,7 +221,7 @@ def check_scf_convergence_per_step(outcar_path: str) -> List[bool]:
     for idx, start in enumerate(step_starts):
         end = step_starts[idx + 1] if idx + 1 < len(step_starts) else len(lines)
         block = ''.join(lines[start:end])
-        results.append(_SCF_CONVERGED_STR in block)
+        results.append(any(s in block for s in _SCF_CONVERGED_STRS))
     return results
 
 

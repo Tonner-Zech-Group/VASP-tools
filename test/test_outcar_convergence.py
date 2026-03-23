@@ -20,6 +20,7 @@ from conftest import (
     OUTCAR_MULTI_STEP_CONVERGED,
     OUTCAR_MULTI_STEP_PARTIAL,
     OUTCAR_ONE_STEP_CONVERGED,
+    OUTCAR_ONE_STEP_CONVERGED_V6,
     OUTCAR_ONE_STEP_SCF_FAILED,
     _POTCAR_POSCAR_HEADER_ALIGNED,
     _POTCAR_POSCAR_HEADER_LEADING_SPACE,
@@ -104,6 +105,12 @@ class TestCheckScfConvergencePerStep:
     def test_empty_outcar_returns_empty_list(self, tmp_path):
         p = _write_outcar(tmp_path, "no iteration markers here\n")
         assert check_scf_convergence_per_step(p) == []
+
+    def test_vasp6_scf_string_recognised(self, tmp_path):
+        # VASP 6.x uses "reached required accuracy - stopping SCF-cycle"
+        p = _write_outcar(tmp_path, OUTCAR_ONE_STEP_CONVERGED_V6)
+        result = check_scf_convergence_per_step(p)
+        assert result == [True]
 
     def test_gz_file_is_read_transparently(self, tmp_path):
         p = _write_outcar(tmp_path, OUTCAR_ONE_STEP_CONVERGED, "OUTCAR.gz")

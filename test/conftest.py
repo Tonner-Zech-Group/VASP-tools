@@ -49,18 +49,23 @@ asdfasdf
 # Minimal OUTCAR fragments for outcar_convergence tests
 # ---------------------------------------------------------------------------
 
-# One ionic step whose SCF converged; ionic relaxation also converged.
+# Iteration line formats seen in the wild:
+#   VASP 5.x — no leading space, "aborting loop because EDIFF is reached" for SCF
+#   VASP 6.x — may have a leading space, "reached required accuracy - stopping SCF-cycle"
+# Fixtures below use the VASP 5.x format (the dominant version in this codebase).
+
+# One ionic step whose SCF converged (VASP 5.x format); ionic relaxation also converged.
 OUTCAR_ONE_STEP_CONVERGED = """\
- ----------------------------------------- Iteration    1(   1) -----------------------------------------
+--------------------------------------- Iteration      1(   1)  ---------------------------------------
  DAV:   1    -0.100000E+03   some data
  DAV:   2    -0.101000E+03   some data
-       reached required accuracy - stopping SCF-cycle
+------------------------ aborting loop because EDIFF is reached ----------------------------------------
        reached required accuracy - stopping structural energy minimisation
 """
 
 # One ionic step whose SCF did NOT converge (hit NELM); no ionic convergence.
 OUTCAR_ONE_STEP_SCF_FAILED = """\
- ----------------------------------------- Iteration    1(   1) -----------------------------------------
+--------------------------------------- Iteration      1(   1)  ---------------------------------------
  DAV:   1    -0.100000E+03   some data
  DAV:   2    -0.100100E+03   some data
 """
@@ -68,23 +73,32 @@ OUTCAR_ONE_STEP_SCF_FAILED = """\
 # Three ionic steps: steps 1 and 3 SCF-converged, step 2 SCF-failed.
 # No ionic convergence (geometry did not finish).
 OUTCAR_MULTI_STEP_PARTIAL = """\
- ----------------------------------------- Iteration    1(   1) -----------------------------------------
+--------------------------------------- Iteration      1(   1)  ---------------------------------------
  DAV:   1    -0.100000E+03   some data
-       reached required accuracy - stopping SCF-cycle
- ----------------------------------------- Iteration    2(   1) -----------------------------------------
+------------------------ aborting loop because EDIFF is reached ----------------------------------------
+--------------------------------------- Iteration      2(   1)  ---------------------------------------
  DAV:   1    -0.101000E+03   some data
- ----------------------------------------- Iteration    3(   1) -----------------------------------------
+--------------------------------------- Iteration      3(   1)  ---------------------------------------
  DAV:   1    -0.102000E+03   some data
-       reached required accuracy - stopping SCF-cycle
+------------------------ aborting loop because EDIFF is reached ----------------------------------------
 """
 
 # Two ionic steps both SCF-converged; ionic relaxation converged.
 OUTCAR_MULTI_STEP_CONVERGED = """\
+--------------------------------------- Iteration      1(   1)  ---------------------------------------
+ DAV:   1    -0.100000E+03   some data
+------------------------ aborting loop because EDIFF is reached ----------------------------------------
+--------------------------------------- Iteration      2(   1)  ---------------------------------------
+ DAV:   1    -0.101000E+03   some data
+------------------------ aborting loop because EDIFF is reached ----------------------------------------
+       reached required accuracy - stopping structural energy minimisation
+"""
+
+# Same content but using VASP 6.x format (leading space + different SCF string).
+OUTCAR_ONE_STEP_CONVERGED_V6 = """\
  ----------------------------------------- Iteration    1(   1) -----------------------------------------
  DAV:   1    -0.100000E+03   some data
-       reached required accuracy - stopping SCF-cycle
- ----------------------------------------- Iteration    2(   1) -----------------------------------------
- DAV:   1    -0.101000E+03   some data
+ DAV:   2    -0.101000E+03   some data
        reached required accuracy - stopping SCF-cycle
        reached required accuracy - stopping structural energy minimisation
 """
