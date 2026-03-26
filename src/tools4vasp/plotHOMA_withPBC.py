@@ -6,13 +6,10 @@
 # 2026/03/26
 #
 import argparse
-from ase.io import read, write
-from ase.visualize import view
-from ase.visualize.plot import plot_atoms
+from ase.io import read
 from ase.neighborlist import neighbor_list
-import matplotlib.pyplot as plt
-import ase
 from ase import Atoms
+import matplotlib.pyplot as plt
 import numpy as np
 import itertools
 plt.rcParams["font.family"] = "arial"
@@ -29,7 +26,7 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
             if atom.symbol == typ:
                 carbons.append(atom)
     # print(carbons)
-    if pbc == True:
+    if pbc:
         max_X_coord = max([i[0] for i in carbons.get_positions()])
         min_X_coord = min([i[0] for i in carbons.get_positions()])
         max_Y_coord = max([i[1] for i in carbons.get_positions()])
@@ -158,7 +155,7 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
                     comb.sort()
                     if i == comb:
                         helper = True
-            if helper == False:
+            if not helper:
                 SSSR_edges.append(i)
                 SSSR.append(cycles[pos])
                 # print(len(SSSR))
@@ -252,7 +249,7 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
     X_max = max([i[0] for i in carbons.get_positions()])
 
     text_kwargs = dict(ha='center', va='center', fontsize=16, color='black')
-    if pbc == False:
+    if not pbc:
         f=0.6
         plt.figure(figsize=[f*(X_max-X_min+0.8),f*(Y_max-Y_min+0.8)], dpi=300)
         plt.xlim(X_min-0.4,X_max+0.4)
@@ -269,15 +266,19 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
     #plt.plot([-2,-2],[-2, 2], color="red", zorder=1000) # lines for testing
     #plt.plot([-2,2],[-2, -2], color="red", zorder=1000)
     for atom in carbons:
-        if atom.symbol == "C": plt.plot(atom.position[0], atom.position[1], "o", color="black", zorder=100, ms=size)
-        elif atom.symbol == "O": plt.plot(atom.position[0], atom.position[1], "o", color="red", zorder=100, ms=size)
-        elif atom.symbol == "H": plt.plot(atom.position[0], atom.position[1], "o", color="grey", zorder=100, ms=size)
-        else: plt.plot(atom.position[0], atom.position[1], "o", color="deeppink", zorder=100, ms=size)
+        if atom.symbol == "C":
+            plt.plot(atom.position[0], atom.position[1], "o", color="black", zorder=100, ms=size)
+        elif atom.symbol == "O":
+            plt.plot(atom.position[0], atom.position[1], "o", color="red", zorder=100, ms=size)
+        elif atom.symbol == "H":
+            plt.plot(atom.position[0], atom.position[1], "o", color="grey", zorder=100, ms=size)
+        else:
+            plt.plot(atom.position[0], atom.position[1], "o", color="deeppink", zorder=100, ms=size)
     for pos,[e1,e2] in enumerate(edges):
         plt.plot([carbons[e1].position[0],carbons[e2].position[0]],[carbons[e1].position[1],carbons[e2].position[1]], color=color_list[pos], lw=2/3*size, zorder=50)
     for pos,r in enumerate(SSSR):
         plt.fill([carbons[i].position[0] for i in r], [carbons[i].position[1] for i in r], color=ring_color[pos], zorder=10)
-        if no_values == False:
+        if not no_values:
             X_list = []
             Y_list = []
             for i in r:
