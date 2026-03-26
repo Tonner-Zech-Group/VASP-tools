@@ -62,7 +62,7 @@ function readoptions
             H) extension='_h' ;;
             g) extension='_GW' ;;
             G) extension='_sv_GW' ;;
-            \?) printf "\n\e[38;5;1m* Error: Invalid option '$1'. Use -h for help. \e[0m\n\n"; exit 1 ;;
+            \?) printf "\n\e[38;5;1m* Error: Invalid option %s. Use -h for help. \e[0m\n\n" "$1"; exit 1 ;;
         esac
     done
 }
@@ -79,13 +79,13 @@ elif [ -n "$1" ]; then
         exit 1
     elif [[ "$1" == -* ]]; then
         if [[ ${#1} -gt 2 ]]; then
-            printf "\n\e[38;5;1m* Error: Only one option allowed at a time! You passed combined options '$1'. Use -h for help. \e[0m\n\n"
+            printf "\n\e[38;5;1m* Error: Only one option allowed at a time! You passed combined options %s. Use -h for help. \e[0m\n\n" "$1"
             exit 1
         else
             readoptions "$@"
         fi
     else
-        printf "\n\e[38;5;1m* Error: Invalid option '$1'. Use -h for help. \e[0m\n\n"
+        printf "\n\e[38;5;1m* Error: Invalid option %s. Use -h for help. \e[0m\n\n" "$1"
         exit 1
     fi
 else
@@ -107,16 +107,16 @@ declare -A element_group=(
 # Execution of creating the POTCAR
 if [ -f POSCAR ]; then # Check if POSCAR exists
     if [ -s POTCAR ]; then # Check if old POTCAR already exists
-        printf "\n\e[38;5;9;4m* Warning:\e[0m Hi $(whoami), you already have an old POTCAR. I am deleting it and creating the new one.\n\n"
+        printf "\n\e[38;5;9;4m* Warning:\e[0m Hi %s, you already have an old POTCAR. I am deleting it and creating the new one.\n\n" "$(whoami)"
         rm POTCAR
     fi
     ATOMS=$(sed -n '6p' POSCAR) && nA=$(wc -w <<< "$ATOMS") # Get elements
     NUMBERS=$(sed -n '7p' POSCAR) && nN=$(wc -w <<< "$NUMBERS")  # Get number of atoms
     if [ "$nA" -ne "$nN" ]; then # Check if number of elements in line 6 and 7 match
-        printf "\n\e[38;5;1m* Error: Number of elements in line 6 (elements) and line 7 (count) do not match: $nA vs. $nN \e[0m \n\n"
+        printf "\n\e[38;5;1m* Error: Number of elements in line 6 (elements) and line 7 (count) do not match: %s vs. %s \e[0m \n\n" "$nA" "$nN"
         exit 1
     fi
-    echo "POTCAR for these elements will be created (in order): " $ATOMS
+    echo "POTCAR for these elements will be created (in order): $ATOMS"
     for element in $ATOMS
     do
         if [ "$decision" == "1" ]; then # Check if recommended default potentials should be used
