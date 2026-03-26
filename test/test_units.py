@@ -69,7 +69,7 @@ def test_calc_rms_known_value():
 
 
 # ---------------------------------------------------------------------------
-# vaspGetEF — get_max_f
+# vaspGetEF — get_max_f and read_free_mask
 # ---------------------------------------------------------------------------
 
 def test_get_max_f_single_atom():
@@ -92,6 +92,170 @@ def test_get_max_f_picks_maximum():
         [0.0, 2.0, 0.0],   # |f| = 2
     ])
     assert get_max_f(atoms) == pytest.approx(5.0)
+
+
+def test_get_max_f_mask_suppresses_frozen_atom():
+    """A fully-frozen atom (mask all False) must not contribute to max force."""
+    from tools4vasp.vaspGetEF import get_max_f
+    from unittest.mock import MagicMock
+
+    atoms = MagicMock()
+    # atom 0 has large forces but is fully frozen; atom 1 is free
+    atoms.get_forces.return_value = np.array([
+        [10.0, 10.0, 10.0],  # frozen → zeroed
+        [3.0,  4.0,  0.0],   # free   → |f| = 5
+    ])
+    mask = np.array([[False, False, False],
+                     [True,  True,  True]], dtype=bool)
+    assert get_max_f(atoms, free_mask=mask) == pytest.approx(5.0)
+
+
+def test_get_max_f_mask_partial_component():
+    """A per-component mask (T T F) must zero only the frozen component."""
+    from tools4vasp.vaspGetEF import get_max_f
+    from unittest.mock import MagicMock
+
+    atoms = MagicMock()
+    # One atom, z component frozen.  Active force: sqrt(3^2 + 4^2) = 5.
+    atoms.get_forces.return_value = np.array([[3.0, 4.0, 99.0]])
+    mask = np.array([[True, True, False]], dtype=bool)
+    assert get_max_f(atoms, free_mask=mask) == pytest.approx(5.0)
+
+
+def test_get_max_f_no_mask_unchanged():
+    """Without a mask the function behaves exactly as before."""
+    from tools4vasp.vaspGetEF import get_max_f
+    from unittest.mock import MagicMock
+
+    atoms = MagicMock()
+    atoms.get_forces.return_value = np.array([[0.0, 0.0, 7.0]])
+    assert get_max_f(atoms) == pytest.approx(7.0)
+
+
+# POSCAR fixtures for read_free_mask tests
+
+_POSCAR_NO_SD = """\
+H2 molecule
+1.0
+10.0  0.0  0.0
+ 0.0 10.0  0.0
+ 0.0  0.0 10.0
+H
+2
+Cartesian
+0.0 0.0 0.0
+5.0 0.0 0.0
+"""
+
+_POSCAR_ALL_FROZEN = """\
+H2 fully frozen
+1.0
+10.0  0.0  0.0
+ 0.0 10.0  0.0
+ 0.0  0.0 10.0
+H
+2
+Selective dynamics
+Cartesian
+0.0 0.0 0.0 F F F
+5.0 0.0 0.0 F F F
+"""
+
+_POSCAR_MIXED = """\
+H2 mixed constraints
+1.0
+10.0  0.0  0.0
+ 0.0 10.0  0.0
+ 0.0  0.0 10.0
+H
+2
+Selective dynamics
+Cartesian
+0.0 0.0 0.0 T T T
+5.0 0.0 0.0 T T F
+"""
+
+_POSCAR_PARTIAL = """\
+H2 per-component
+1.0
+10.0  0.0  0.0
+ 0.0 10.0  0.0
+ 0.0  0.0 10.0
+H
+2
+Selective dynamics
+Cartesian
+0.0 0.0 0.0 F F T
+5.0 0.0 0.0 T F T
+"""
+
+
+def test_read_free_mask_no_selective_dynamics(tmp_path):
+    """POSCAR without selective dynamics must return None."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    p = tmp_path / "POSCAR"
+    p.write_text(_POSCAR_NO_SD)
+    assert read_free_mask(str(p)) is None
+
+
+def test_read_free_mask_missing_file():
+    """Non-existent file must return None without raising."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    assert read_free_mask("/nonexistent/POSCAR") is None
+
+
+def test_read_free_mask_all_frozen_returns_none(tmp_path):
+    """All-frozen POSCAR (F F F for every atom) still returns a mask."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    p = tmp_path / "POSCAR"
+    p.write_text(_POSCAR_ALL_FROZEN)
+    mask = read_free_mask(str(p))
+    assert mask is not None
+    assert mask.shape == (2, 3)
+    assert not mask.any()
+
+
+def test_read_free_mask_mixed_shape(tmp_path):
+    """Mask must have correct shape (natoms, 3)."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    p = tmp_path / "POSCAR"
+    p.write_text(_POSCAR_MIXED)
+    mask = read_free_mask(str(p))
+    assert mask is not None
+    assert mask.shape == (2, 3)
+
+
+def test_read_free_mask_mixed_first_atom_free(tmp_path):
+    """First atom (T T T) must be entirely free."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    p = tmp_path / "POSCAR"
+    p.write_text(_POSCAR_MIXED)
+    mask = read_free_mask(str(p))
+    assert mask[0].all()
+
+
+def test_read_free_mask_mixed_second_atom_z_frozen(tmp_path):
+    """Second atom (T T F) must have only z frozen."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    p = tmp_path / "POSCAR"
+    p.write_text(_POSCAR_MIXED)
+    mask = read_free_mask(str(p))
+    assert mask[1, 0] is np.bool_(True)
+    assert mask[1, 1] is np.bool_(True)
+    assert mask[1, 2] is np.bool_(False)
+
+
+def test_read_free_mask_partial_components(tmp_path):
+    """Per-component constraints (F F T / T F T) must be read correctly."""
+    from tools4vasp.vaspGetEF import read_free_mask
+    p = tmp_path / "POSCAR"
+    p.write_text(_POSCAR_PARTIAL)
+    mask = read_free_mask(str(p))
+    assert mask is not None
+    # atom 0: F F T
+    np.testing.assert_array_equal(mask[0], [False, False, True])
+    # atom 1: T F T
+    np.testing.assert_array_equal(mask[1], [True, False, True])
 
 
 # ---------------------------------------------------------------------------

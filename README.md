@@ -105,6 +105,7 @@ elf2cube ELFCAR --output elf        # → elf.cube (or elf_up/down for spinpol)
 ```bash
 vaspcheck ./run          # check occupations and convergence
 vaspGetEF ./run          # plot energy+forces across restart jobs
+vaspGetEF ./run --poscar ./run/POSCAR  # selective-dynamics aware (forces over free DOF only)
 vasp2traj traj.xyz OUTCAR  # convert OUTCAR to trajectory
 ```
 
@@ -147,7 +148,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 | `split_vasp_freq` | Split a VASP frequency calculation into partial jobs and recombine. | `split_vasp_freq split 20` |
 | `vasp2traj` | Convert VASP OUTCAR or XDATCAR to an ext-xyz trajectory. | `vasp2traj traj.xyz OUTCAR` |
 | `vaspcheck` | Assert proper occupations and SCF+GO convergence using ASE. | `vaspcheck ./run` |
-| `vaspGetEF` | Plot energy and forces across multiple GO restart jobs. | `vaspGetEF ./run` |
+| `vaspGetEF` | Plot energy and max force across multiple GO restart jobs. When a POSCAR with selective dynamics is found, forces are computed over free (unfrozen) components only — per-component constraints (e.g. `T T F`) are handled correctly. | `vaspGetEF ./run` |
 | `viewMode` | Animated preview of a MODECAR in the ASE GUI. | `viewMode --scale 2` |
 | `visualize-magnetization` | Create a VMD visualisation state for the magnetisation density. | `visualize-magnetization` |
 
