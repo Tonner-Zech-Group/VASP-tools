@@ -6,8 +6,7 @@
 # 2026/03/26
 #
 import numpy as np
-from ase import Atom, Atoms
-from ase.io import read, write
+from ase.io import read
 from ase.build.tools import sort
 from ase.constraints import FixAtoms
 from scipy.optimize import leastsq
@@ -33,7 +32,7 @@ def main(xyz, poscar, out, rot, cen, sor, const):
         a = solution[0]/max(solution)
         b = solution[1]/max(solution)
         c = solution[2]/max(solution)
-        d = solution[3]/max(solution)
+        # d = solution[3]/max(solution)
         cos_angle = c/np.sqrt(a**2+b**2+c**2)
         sin_angle = np.sqrt((a**2+b**2)/(a**2+b**2+c**2))
         u1 = b/np.sqrt(a**2+b**2)
@@ -43,9 +42,12 @@ def main(xyz, poscar, out, rot, cen, sor, const):
                              [-u2*sin_angle,                 u1*sin_angle,                  cos_angle]])
         for index,atom in enumerate(mol):
             atom.position = R_matrix.dot(mol_coords[index])
-    if cen: mol.center()
-    if sor: mol = sort(mol)
-    if const: mol.set_constraint(FixAtoms(indices=[atom.index for atom in mol]))
+    if cen:
+        mol.center()
+    if sor:
+        mol = sort(mol)
+    if const:
+        mol.set_constraint(FixAtoms(indices=[atom.index for atom in mol]))
     mol.write(out)
 
 if __name__ == "__main__":
