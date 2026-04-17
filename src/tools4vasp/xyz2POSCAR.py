@@ -16,7 +16,7 @@ def distance_to_plane(params,X):
     distance = ((params[0:3]*X.T).sum(axis=1) + params[3])/np.linalg.norm(params[0:3])
     return distance
 
-def main(xyz, poscar, out, rot, cen, sor, const):
+def run(xyz, poscar, out='POSCAR_new', rot=True, cen=True, sor=True, const=False):
     mol = read(xyz)
     cell_info = read(poscar)
     mol.set_pbc(True)
@@ -55,14 +55,21 @@ def main(xyz, poscar, out, rot, cen, sor, const):
         mol.set_constraint(FixAtoms(indices=[atom.index for atom in mol]))
     mol.write(out, format='vasp')
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Convert a Molecule saved in xyz into a new POSCAR with the Cell of POSCAR')
-    parser.add_argument('xyz_file', type=str, help='Coordinates from xyz File')
-    parser.add_argument('cell_from_POSCAR', type=str, help='Cell from POSCAR File')
+def main():
+    """CLI entry point registered in pyproject.toml [project.scripts]."""
+    parser = argparse.ArgumentParser(
+        description='Insert a molecule from .xyz into a POSCAR cell',
+        epilog='Example: xyz2POSCAR molecule.xyz POSCAR --outfile POSCAR_new')
+    parser.add_argument('xyz_file', type=str, help='Coordinates from xyz file')
+    parser.add_argument('cell_from_POSCAR', type=str, help='Cell from POSCAR file')
     parser.add_argument('--outfile', help='Name of new POSCAR', default='POSCAR_new')
-    parser.add_argument('--no_rotation_to_xy', help='DON\'T rotate Molecular Plane into XY Plane', action='store_false')
-    parser.add_argument('--no_center', help='DON\'T Center Atoms in Cell', action='store_false')
-    parser.add_argument('--no_sort', help='DON\'T Sort Atom Labels', action='store_false')
-    parser.add_argument('--constrain', help='Fix all Atom Positions', action='store_true')
+    parser.add_argument('--no_rotation_to_xy', help="DON'T rotate molecular plane into XY plane", action='store_false')
+    parser.add_argument('--no_center', help="DON'T center atoms in cell", action='store_false')
+    parser.add_argument('--no_sort', help="DON'T sort atom labels", action='store_false')
+    parser.add_argument('--constrain', help='Fix all atom positions', action='store_true')
     args = parser.parse_args()
-    main(args.xyz_file, args.cell_from_POSCAR, args.outfile, args.no_rotation_to_xy, args.no_center, args.no_sort, args.constrain)
+    run(args.xyz_file, args.cell_from_POSCAR, args.outfile,
+        args.no_rotation_to_xy, args.no_center, args.no_sort, args.constrain)
+
+if __name__ == '__main__':
+    main()

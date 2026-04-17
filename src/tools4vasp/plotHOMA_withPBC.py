@@ -15,7 +15,7 @@ import itertools
 plt.rcParams["font.family"] = "arial"
 # import timeit
 
-def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_path_len, no_of_cyc_combs, atom_types, pbc=False, no_values=False):
+def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_path_len, no_of_cyc_combs, atom_types, pbc=False, no_values=False):
     mol = read(Coordinates)
     if filename == "Coordinates.svg":
         filename=Coordinates.split(".")[0]+".svg"
@@ -305,24 +305,29 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
     plt.savefig(filename, transparent=True)
     #plt.show()
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Calculate and plot HOMA values from atomic coordinates')
-    parser.add_argument('Coordinates',type=str,help='File from which to load atomic coordinates')
+def main():
+    """CLI entry point registered in pyproject.toml [project.scripts]."""
+    parser = argparse.ArgumentParser(
+        description='Calculate and plot HOMA values from atomic coordinates',
+        epilog='Example: plotHOMA_withPBC coords.xyz --pbc --rings 0 1 2 3 4 5')
+    parser.add_argument('Coordinates', type=str, help='File from which to load atomic coordinates')
     parser.add_argument('--file', help='Filename which is plotted', default='Coordinates.svg')
     parser.add_argument('--C1', help='Carbon atom which is centered', default=3)
     parser.add_argument('--C2', help='Carbon atom which is aligned', default=4)
-    parser.add_argument('--axis', help='Axis on which two carbons atoms are aligned (\"x\"->horizaontal or \"y\"->vertical)', default="y")
-    parser.add_argument('--d_opt', help='Optimal Benzene bond length', type=float, default=1.398)
-    parser.add_argument('--norm', help='Normalization constant so that HOMA of 1,3,5-Cyclohexatriene is 0', type=float, default=362.9)
-    parser.add_argument('--pbc_cutoff', help='Cutoff, for which carbon atoms outside of pbc cell are considered (increase if not all rings were used)', type=float, default=2.8)
+    parser.add_argument('--axis', help='Axis on which two carbon atoms are aligned ("x" or "y")', default="y")
+    parser.add_argument('--d_opt', help='Optimal benzene bond length', type=float, default=1.398)
+    parser.add_argument('--norm', help='Normalization constant so that HOMA of 1,3,5-cyclohexatriene is 0', type=float, default=362.9)
+    parser.add_argument('--pbc_cutoff', help='PBC cutoff for atoms outside cell', type=float, default=2.8)
     parser.add_argument('--pbc', help='Use periodic boundary conditions', action='store_true')
     parser.add_argument('--no_values', help='Plot no HOMA values inside rings', action='store_true')
     parser.add_argument('--rings', help='Manually specify rings', nargs='+', action='append', default=[])
-    parser.add_argument('--max_ring_len', help='Maximum length of ring that is considered (may HEAVILY reduce time for large molecules)', type=int, default=8)
-    parser.add_argument('--no_of_cyc_combs', help='Maximum number of cycle combinations to obtain SSSR (may reduce time for large molecules, small number if max_ring_len is set)', type=int, default=4)
-    parser.add_argument('--atom_types', help='Manually specify atom types (Note: optimal CC bond length is applied to CX bond!)', nargs='+', action='store', default=["C"])
+    parser.add_argument('--max_ring_len', help='Maximum ring length to consider', type=int, default=8)
+    parser.add_argument('--no_of_cyc_combs', help='Maximum number of cycle combinations for SSSR', type=int, default=4)
+    parser.add_argument('--atom_types', help='Atom types to consider', nargs='+', action='store', default=["C"])
     args = parser.parse_args()
-    #start_time = timeit.default_timer()
-    main(args.Coordinates, args.file, args.C1, args.C2, args.axis, args.d_opt, args.norm, args.rings, args.pbc_cutoff, args.max_ring_len, args.no_of_cyc_combs, args.atom_types, args.pbc, args.no_values)
-    #stop_time = timeit.default_timer()
-    #print('Time: ', np.round(stop_time - start_time,2), "s")  
+    run(args.Coordinates, args.file, args.C1, args.C2, args.axis, args.d_opt,
+        args.norm, args.rings, args.pbc_cutoff, args.max_ring_len,
+        args.no_of_cyc_combs, args.atom_types, args.pbc, args.no_values)
+
+if __name__ == '__main__':
+    main()

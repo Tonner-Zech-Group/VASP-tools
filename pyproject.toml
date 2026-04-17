@@ -46,6 +46,7 @@ kspacing2kgrid = "tools4vasp.kspacing2kgrid:main"
 plot_neb_movie = "tools4vasp.plot_neb_movie:main"
 neb2movie = "tools4vasp.neb2movie:main"
 plotIRC = "tools4vasp.plotIRC:main"
+plotHOMA_withPBC = "tools4vasp.plotHOMA_withPBC:main"
 plotNEB = "tools4vasp.plotNEB:main"
 poscar2nbands = "tools4vasp.poscar2nbands:main"
 replace_potcar_symlinks = "tools4vasp.replace_potcar_symlinks:main"
@@ -56,6 +57,7 @@ vaspcheck = "tools4vasp.vaspcheck:main"
 vaspGetEF = "tools4vasp.vaspGetEF:main"
 viewMode = "tools4vasp.viewMode:main"
 visualize-magnetization = "tools4vasp.visualize_magnetization:main"
+xyz2POSCAR = "tools4vasp.xyz2POSCAR:main"
 
 
 [tool.setuptools]

@@ -127,12 +127,12 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 |------|-------------|---------|
 | `add-MODECAR` | Add MODECAR displacements to a POSCAR, output xyz animation. | `add-MODECAR --poscar POSCAR --modecar MODECAR` |
 | `freq2mode` | Generate MODECAR and mass-weighted MODECAR from a frequency calculation. | `freq2mode -i 0` |
-| `getPOTCAR`\* | Generate POTCAR with same order of elements as specified in POSCAR. | `getPOTCAR -r` |
+| `getPOTCAR`\* | Generate POTCAR with same order of elements as specified in POSCAR. Requires `$VASP_PP_PATH`. | `getPOTCAR -r` |
 | `kgrid2kspacing` | Get KSPACING equivalent for the current POSCAR+KPOINTS. | `kgrid2kspacing` |
 | `kspacing2kgrid` | Get k-point grid for a given KSPACING and the current POSCAR. | `kspacing2kgrid 0.15` |
 | `mixed_interpolate` | Geodesic interpolation for the molecule + IDPP for the surface. | `mixed_interpolate` |
 | `poscar2nbands` | Compute the recommended NBANDS for LOBSTER from POSCAR/INCAR/POTCAR. | `poscar2nbands` |
-| `xyz2POSCAR`\* | Insert molecule from .xyz file into a cell from a POSCAR. | `xyz2POSCAR mol.xyz POSCAR_with_cell` |
+| `xyz2POSCAR` | Insert molecule from .xyz file into a cell from a POSCAR. | `xyz2POSCAR mol.xyz POSCAR_with_cell` |
 
 ## Post-processing tools
 
@@ -143,7 +143,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 | `elf2cube` | Convert ELFCAR files to cube files. | `elf2cube ELFCAR --output elf` |
 | `freq2jmol` | Write JMol-compatible xyz files for all vibrational modes. | `freq2jmol --directory ./` |
 | `neb2movie` | Convert VASP NEB images to an ASE ext-xyz movie (like `nebmovie.pl`). | `neb2movie --output neb.xyz` |
-| `plotHOMA_withPBC`\* | Calculate and plot HOMA from coordinates, including pbc. | `plotHOMA_withPBC POSCAR` |
+| `plotHOMA_withPBC` | Calculate and plot HOMA from coordinates, including pbc. | `plotHOMA_withPBC POSCAR` |
 | `plotIRC` | Plot VASP IRC calculations in both directions, shift-compatible. | `plotIRC -r irc_r/ -p irc_p/ -t ts/` |
 | `plotNEB` | Plot VASP+VTST NEB results (reads `spline.dat` + `neb.dat`). | `plotNEB --unit eV --file neb.png` |
 | `plot_neb_movie` | Create presentation images for NEB using VMD and plotNEB. | `plot_neb_movie` |
@@ -155,7 +155,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 | `viewMode` | Animated preview of a MODECAR in the ASE GUI. | `viewMode --scale 2` |
 | `visualize-magnetization` | Create a VMD visualisation state for the magnetisation density. | `visualize-magnetization` |
 
-\*Not yet installed as a console command via `pip install`. Run directly from the repository checkout.
+\*Bash script, not installed as a console command via `pip install`. Run directly from the repository checkout.
 
 ## Development
 
