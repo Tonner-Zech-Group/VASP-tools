@@ -135,22 +135,28 @@ def detect_surf(initial_mol,plot=False):
         plt.show()
     return surf, mol
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description='Split adsorbate-surface-complex into surface and molecule.')
-    parser.add_argument('POSCAR_asc', type=str, help='POSCAR file of adsorbate-surface-complex')
-    parser.add_argument('-p','--plot', action='store_true', help='Plot z-count distribution')
-    parser.add_argument('-v','--view', action='store_true', help='View surface and molecule')
-    global args
-    args = parser.parse_args()
-    
-    initial_mol = read(args.POSCAR_asc)
-    surf, mol = detect_surf(initial_mol,args.plot)
-    if args.view: 
+def run(poscar_path, plot=False, view_result=False):
+    """Split an adsorbate-surface-complex and write POSCAR_surf / POSCAR_mol."""
+    initial_mol = read(poscar_path)
+    surf, mol = detect_surf(initial_mol, plot=plot)
+    if view_result:
         view(surf)
         view(mol)
-    surf.write("POSCAR_surf")
-    mol.write("POSCAR_mol")
+    surf.write("POSCAR_surf", format='vasp')
+    mol.write("POSCAR_mol", format='vasp')
+    return surf, mol
+
+def main():
+    """CLI entry point registered in pyproject.toml [project.scripts]."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Split adsorbate-surface-complex into surface and molecule.',
+        epilog='Example: split_surf_and_mol POSCAR -p')
+    parser.add_argument('POSCAR_asc', type=str, help='POSCAR file of adsorbate-surface-complex')
+    parser.add_argument('-p', '--plot', action='store_true', help='Plot z-count distribution')
+    parser.add_argument('-v', '--view', action='store_true', help='View surface and molecule')
+    args = parser.parse_args()
+    run(args.POSCAR_asc, plot=args.plot, view_result=args.view)
 
 if __name__ == '__main__':
     main()

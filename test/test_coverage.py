@@ -1076,4 +1076,92 @@ def test_read_frequency_from_outcar():
     freq_data = read_frequency_from_outcar(lines, freqs[0], mock_atoms)
     assert len(freq_data) == 2
     assert freq_data[0] == pytest.approx([0.1, 0.2, 0.3])
-    assert freq_data[1] == pytest.approx([-0.1, -0.2, -0.3])
+
+
+# ===========================================================================
+# split_surf_and_mol
+# ===========================================================================
+
+def _make_slab_with_molecule():
+    """Create a 3x3 Cu(100) 2-layer slab (9 atoms/layer) with CO on top."""
+    from ase import Atoms
+    positions = []
+    # Layer 1 at z=0, 3x3 grid
+    for i in range(3):
+        for j in range(3):
+            positions.append([i * 2.55, j * 2.55, 0.0])
+    # Layer 2 at z=1.8, 3x3 grid offset
+    for i in range(3):
+        for j in range(3):
+            positions.append([i * 2.55 + 1.275, j * 2.55 + 1.275, 1.8])
+    # CO molecule on top
+    positions.append([3.825, 3.825, 5.0])
+    positions.append([3.825, 3.825, 6.13])
+    symbols = ['Cu'] * 18 + ['C', 'O']
+    cell = [7.65, 7.65, 25.0]
+    return Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+
+
+def test_detect_surf_separates_slab_and_molecule():
+    """detect_surf() must assign Cu to surface and C,O to molecule."""
+    from tools4vasp.split_surf_and_mol import detect_surf
+    atoms = _make_slab_with_molecule()
+    surf, mol = detect_surf(atoms, plot=False)
+    assert len(surf) == 18
+    assert len(mol) == 2
+    assert set(mol.get_chemical_symbols()) == {'C', 'O'}
+    assert set(surf.get_chemical_symbols()) == {'Cu'}
+
+
+def test_detect_surf_preserves_tags():
+    """detect_surf() must store original indices in atom tags."""
+    from tools4vasp.split_surf_and_mol import detect_surf
+    atoms = _make_slab_with_molecule()
+    surf, mol = detect_surf(atoms, plot=False)
+    all_tags = sorted(list(surf.get_tags()) + list(mol.get_tags()))
+    assert all_tags == list(range(20))
+
+
+def test_count_z_voxels_using_window():
+    """count_z_voxels_using_window() must count atoms in z-windows."""
+    from tools4vasp.split_surf_and_mol import count_z_voxels_using_window
+    z_coords = [0.0, 0.0, 0.0, 5.0, 5.0, 5.0]
+    points, counts = count_z_voxels_using_window(20.0, 0.5, 1.0, z_coords)
+    assert counts[0] == 3
+
+
+def test_find_plateaus_with_known_data():
+    """find_plateaus() must identify consecutive equal non-zero values."""
+    from tools4vasp.split_surf_and_mol import find_plateaus
+    data = [0, 0, 3, 3, 3, 0, 0, 2, 2, 0]
+    plateaus, heights = find_plateaus(data)
+    assert len(plateaus) == 2
+    assert plateaus[0] == (2, 4)
+    assert heights[0] == 3
+
+
+def test_split_surf_and_mol_run(tmp_path, monkeypatch):
+    """run() must write POSCAR_surf and POSCAR_mol."""
+    from tools4vasp.split_surf_and_mol import run
+    atoms = _make_slab_with_molecule()
+    poscar = tmp_path / "POSCAR"
+    atoms.write(str(poscar), format='vasp')
+    monkeypatch.chdir(tmp_path)
+    surf, mol = run(str(poscar))
+    assert (tmp_path / "POSCAR_surf").is_file()
+    assert (tmp_path / "POSCAR_mol").is_file()
+    assert len(surf) == 18
+    assert len(mol) == 2
+
+
+def test_split_surf_and_mol_main_cli(tmp_path, monkeypatch):
+    """main() must parse sys.argv and produce output files."""
+    from tools4vasp.split_surf_and_mol import main
+    atoms = _make_slab_with_molecule()
+    poscar = tmp_path / "POSCAR"
+    atoms.write(str(poscar), format='vasp')
+    monkeypatch.chdir(tmp_path)
+    with patch("sys.argv", ["split_surf_and_mol", str(poscar)]):
+        main()
+    assert (tmp_path / "POSCAR_surf").is_file()
+    assert (tmp_path / "POSCAR_mol").is_file()

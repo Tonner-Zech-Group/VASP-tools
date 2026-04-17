@@ -190,6 +190,19 @@ def main():
         surf_indices = [i for i in range(len(initial_mol)) if i not in mol_indices]
     method = args.method
 
+    # Validate that mol_indices and surf_indices partition all atoms
+    all_indices = sorted(mol_indices + surf_indices)
+    expected = list(range(len(initial_mol)))
+    if all_indices != expected:
+        missing = set(expected) - set(all_indices)
+        duplicated = {i for i in all_indices if all_indices.count(i) > 1}
+        msg = "Error: mol_indices + surf_indices do not cover all atoms."
+        if missing:
+            msg += f" Missing indices: {sorted(missing)}."
+        if duplicated:
+            msg += f" Duplicated indices: {sorted(duplicated)}."
+        raise ValueError(msg)
+
     if args.intermediate:
         in_read = read(args.intermediate)
         vprint(f"Using intermediate. Length of first segment: {(LEN)//2}, second segment: {(LEN-1)//2}") #if LEN is odd, TS is in the middle, if LEN is even, TS is shifted one image to right
