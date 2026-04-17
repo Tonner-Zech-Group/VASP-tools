@@ -95,7 +95,7 @@ fi
 
 # Definition of recommended default options
 declare -A element_group=(
-    [H]="" [He]="" [Be]="" [B]="" [C]="" [N]="" [O]="" [F]="" [Ne]="" [Mg]="" [Al]="" [Si]="" [P]="" [S]="" [Cl]="" [Ar]="" [Fr]="" [Co]="" [Ni]="" [Cu]="" [Zn]="" [As]="" [Se]="" [Br]="" [Kr]=""
+    [H]="" [He]="" [Be]="" [B]="" [C]="" [N]="" [O]="" [F]="" [Ne]="" [Mg]="" [Al]="" [Si]="" [P]="" [S]="" [Cl]="" [Ar]="" [Co]="" [Ni]="" [Cu]="" [Zn]="" [As]="" [Se]="" [Br]="" [Kr]=""
     [Pd]="" [Ag]="" [Cd]="" [Sb]="" [Te]="" [I]="" [Xe]="" [La]="" [Ce]="" [Re]="" [Os]="" [Ir]="" [Pt]="" [Au]="" [Hg]="" [At]="" [Rn]="" [Ac]="" [Th]="" [Pa]="" [U]="" [Np]="" [Pu]="" [Am]="" [Cm]=""
     [Li]="_sv" [K]="_sv" [Ca]="_sv" [Sc]="_sv" [Ti]="_sv" [V]="_sv" [Rb]="_sv" [Sr]="_sv" [Y]="_sv" [Zr]="_sv" [Nb]="_sv" [Mo]="_sv" [Cs]="_sv" [Ba]="_sv" [W]="_sv" [Fr]="_sv" [Ra]="_sv"
     [Na]="_pv" [Cr]="_pv" [Mn]="_pv" [Tc]="_pv" [Ru]="_pv" [Rh]="_pv" [Hf]="_pv" [Ta]="_pv"
