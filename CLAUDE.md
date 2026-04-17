@@ -111,8 +111,34 @@ Key points:
 1. In the feature branch, bump `version` in `pyproject.toml` and `CITATION.cff`
    (also update `date-released` in `CITATION.cff`).
 2. Merge the PR to `main`.
-3. `tag-on-merge.yml` creates tag `v<version>` → `release.yml` runs tests,
-   builds the wheel, creates a GitHub Release, and publishes to PyPI.
+3. `tag-on-merge.yml` creates tag `v<version>` → `release.yml` builds the
+   wheel, creates a GitHub Release, and publishes to PyPI via trusted publisher.
+
+### PyPI / TestPyPI trusted publisher (one-time setup)
+
+Both `release.yml` (PyPI) and `pypi-publish.yml` (TestPyPI) use **OIDC trusted
+publishing** — no API token is stored in GitHub secrets. Instead, PyPI/TestPyPI
+grant publish rights directly to this workflow via OpenID Connect.
+
+If the trusted publisher is ever lost or needs to be recreated, register it at:
+
+- **PyPI**: https://pypi.org/manage/project/tools4vasp/settings/publishing/
+- **TestPyPI**: https://test.pypi.org/manage/project/tools4vasp/settings/publishing/
+
+Use these values for each:
+
+| Field | Value |
+|-------|-------|
+| Owner | `Tonner-Zech-Group` |
+| Repository | `VASP-tools` |
+| Workflow (PyPI) | `release.yml` |
+| Workflow (TestPyPI) | `pypi-publish.yml` |
+| Environment (PyPI) | `pypi` |
+| Environment (TestPyPI) | `testpypi` |
+
+The GitHub environments (`pypi` and `testpypi`) must exist in the repository
+settings (Settings → Environments) — they gate the `id-token: write` permission
+that OIDC requires.
 
 ## Key dependencies
 
