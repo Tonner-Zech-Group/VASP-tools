@@ -31,7 +31,10 @@ def main(xyz, poscar, out, rot, cen, sor, const):
         solution = leastsq(distance_to_plane, plane_guess, args=(mol_coords.T), maxfev=100000)[0]
         a = solution[0]/max(solution)
         b = solution[1]/max(solution)
-        c = solution[2]/max(solution)
+        norm_val = solution[np.argmax(np.abs(solution))]
+        a = solution[0]/norm_val
+        b = solution[1]/norm_val
+        c = solution[2]/norm_val
         # d = solution[3]/max(solution)
         cos_angle = c/np.sqrt(a**2+b**2+c**2)
         sin_angle = np.sqrt((a**2+b**2)/(a**2+b**2+c**2))
