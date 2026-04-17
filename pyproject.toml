@@ -9,7 +9,8 @@ dependencies = [
   'matplotlib >= 3.8.4',
   'natsort >= 8.3.1',
   'numpy >= 1.24.3',
-  'pymatgen >= 2023.5.10',  
+  'pymatgen >= 2023.5.10',
+  'scipy >= 1.10.0',
 ]
 version = "1.1.0"
 authors = [
