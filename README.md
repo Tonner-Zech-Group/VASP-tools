@@ -127,7 +127,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 |------|-------------|---------|
 | `add-MODECAR` | Add MODECAR displacements to a POSCAR, output xyz animation. | `add-MODECAR --poscar POSCAR --modecar MODECAR` |
 | `freq2mode` | Generate MODECAR and mass-weighted MODECAR from a frequency calculation. | `freq2mode -i 0` |
-| `getPOTCAR` | Generate POTCAR with same order of elements as specified in POSCAR. | `getPOTCAR -r` |
+| `getPOTCAR` | Generate POTCAR with same order of elements as specified in POSCAR. Requires `$VASP_PP_PATH`. | `getPOTCAR -r` |
 | `kgrid2kspacing` | Get KSPACING equivalent for the current POSCAR+KPOINTS. | `kgrid2kspacing` |
 | `kspacing2kgrid` | Get k-point grid for a given KSPACING and the current POSCAR. | `kspacing2kgrid 0.15` |
 | `mixed_interpolate` | Geodesic interpolation for the molecule + IDPP for the surface. | `mixed_interpolate` |

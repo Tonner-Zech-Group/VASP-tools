@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
-# Scipt that mixes geodesic interpolation for the molecule and idpp/direct interpolation for the surface
+# Script that mixes geodesic interpolation for the molecule and idpp/direct interpolation for the surface
 # by F. Thiemann & J. Schramm
 
 from ase.io import read
@@ -12,7 +12,7 @@ from ase.visualize import view
 from pathlib import Path
 from geodesic_interpolate.interpolation import redistribute
 from geodesic_interpolate.geodesic import Geodesic
-from split_surf_and_mol import detect_surf
+from tools4vasp.split_surf_and_mol import detect_surf
 import numpy as np
 from scipy.optimize import leastsq
 
@@ -100,15 +100,18 @@ def rotate_to_XYplane(image,surf_indices):
     #Function that fits a plane to the surface atoms and returns a rotation matrix to the XY plane, by J. Schramm
     surf_coords = image[surf_indices].get_positions()
     plane_guess = [0.1, 0.1, 0.1, 0.1]
-    solution = leastsq(distance_to_plane, plane_guess, args=(surf_coords.T), maxfev=100000)[0]
-    a = solution[0]/max(solution)
-    b = solution[1]/max(solution)
-    c = solution[2]/max(solution)
-    #d = solution[3]/max(solution)
+    solution = leastsq(distance_to_plane, plane_guess, args=(surf_coords.T,), maxfev=100000)[0]
+    norm_val = solution[np.argmax(np.abs(solution))]
+    a = solution[0]/norm_val
+    b = solution[1]/norm_val
+    c = solution[2]/norm_val
+    axis_norm = np.sqrt(a**2+b**2)
+    if np.isclose(axis_norm, 0.0):
+        return np.eye(3)
     cos_angle = c/np.sqrt(a**2+b**2+c**2)
     sin_angle = np.sqrt((a**2+b**2)/(a**2+b**2+c**2))
-    u1 = b/np.sqrt(a**2+b**2)
-    u2 = -a/np.sqrt(a**2+b**2)
+    u1 = b/axis_norm
+    u2 = -a/axis_norm
     R_matrix = np.array([[cos_angle+(u1**2)*(1-cos_angle), u1*u2*(1-cos_angle),           u2*sin_angle],
                             [u1*u2*(1-cos_angle),           cos_angle+(u2**2)*(1-cos_angle), -u1*sin_angle],
                             [-u2*sin_angle,                 u1*sin_angle,                  cos_angle]])
@@ -186,6 +189,19 @@ def main():
         mol_indices = args.molind
         surf_indices = [i for i in range(len(initial_mol)) if i not in mol_indices]
     method = args.method
+
+    # Validate that mol_indices and surf_indices partition all atoms
+    all_indices = sorted(mol_indices + surf_indices)
+    expected = list(range(len(initial_mol)))
+    if all_indices != expected:
+        missing = set(expected) - set(all_indices)
+        duplicated = {i for i in all_indices if all_indices.count(i) > 1}
+        msg = "Error: mol_indices + surf_indices do not cover all atoms."
+        if missing:
+            msg += f" Missing indices: {sorted(missing)}."
+        if duplicated:
+            msg += f" Duplicated indices: {sorted(duplicated)}."
+        raise ValueError(msg)
 
     if args.intermediate:
         in_read = read(args.intermediate)

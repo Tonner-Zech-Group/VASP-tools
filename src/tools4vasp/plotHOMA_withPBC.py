@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Script to caclulate and plot values of the Harmonic Oscillator Model of Aromaticiy (HOMA),
+# Script to calculate and plot values of the Harmonic Oscillator Model of Aromaticity (HOMA),
 # including a simple workaround to plot periodic boundary conditions 
 # by Jakob Schramm
 # 2026/03/26
@@ -15,7 +15,7 @@ import itertools
 plt.rcParams["font.family"] = "arial"
 # import timeit
 
-def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_path_len, no_of_cyc_combs, atom_types, pbc=False, no_values=False):
+def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_path_len, no_of_cyc_combs, atom_types, pbc=False, no_values=False):
     mol = read(Coordinates)
     if filename == "Coordinates.svg":
         filename=Coordinates.split(".")[0]+".svg"
@@ -37,7 +37,7 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
         for x in [0, 1, -1]:
             for y in [0, 1, -1]:
                 for atom in carbons:
-                    new_copy = Atoms("C", [list(atom.position+x*cell[0]+y*cell[1])])
+                    new_copy = Atoms(atom.symbol, [list(atom.position+x*cell[0]+y*cell[1])])
                     if (list(atom.position+x*cell[0]+y*cell[1])[0] < max_X_coord+pbc_cutoff and
                         list(atom.position+x*cell[0]+y*cell[1])[0] > min_X_coord-pbc_cutoff and
                         list(atom.position+x*cell[0]+y*cell[1])[1] < max_Y_coord+pbc_cutoff and
@@ -132,6 +132,9 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
 
         # Smallest Set of Smallest Rings is found by appending smallest cycle
         # if it is not a linear combination of previosly appendet smallest cycles
+        if not cycles:
+            print("ERROR: No cycles found in the molecular graph. Check your input or specify rings manually with --rings.")
+            exit()
         SSSR = [cycles[0]]
         SSSR_edges = [edges_of_cycles[0]]
         for pos,i in enumerate(edges_of_cycles):
@@ -174,18 +177,30 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
     for atom in carbons:
         atom.position=atom.position - shift
 
-    angle_y = np.arctan(carbons[int(C2)].position[0]/carbons[int(C2)].position[1])*180/np.pi
-    angle_x = np.arctan(-carbons[int(C2)].position[1]/carbons[int(C2)].position[0])*180/np.pi
+    x = carbons[int(C2)].position[0]
+    y = carbons[int(C2)].position[1]
+    if np.isclose(x, 0.0) and np.isclose(y, 0.0):
+        print("ERROR: Cannot determine alignment angle because the selected alignment atom is at the origin!")
+        exit()
+
+    angle_y = np.degrees(np.arctan2(x, y))
+    angle_x = np.degrees(np.arctan2(-y, x))
     if a == "y":
-        if carbons[int(C2)].position[0]*np.sin(angle_y*np.pi/180)+carbons[int(C2)].position[1]*np.cos(angle_y*np.pi/180) < 0:
+        rotated_y = x*np.sin(angle_y*np.pi/180)+y*np.cos(angle_y*np.pi/180)
+        if rotated_y < 0:
             angle = angle_y
-        elif carbons[int(C2)].position[0]*np.sin(angle_y*np.pi/180)+carbons[int(C2)].position[1]*np.cos(angle_y*np.pi/180) > 0:
+        elif rotated_y > 0:
             angle = 180+angle_y
+        else:
+            angle = angle_y
     elif a == "x":
-        if carbons[int(C2)].position[0]*np.cos(angle_x*np.pi/180)-carbons[int(C2)].position[1]*np.sin(angle_x*np.pi/180) > 0:
+        rotated_x = x*np.cos(angle_x*np.pi/180)-y*np.sin(angle_x*np.pi/180)
+        if rotated_x > 0:
             angle = angle_x
-        elif carbons[int(C2)].position[0]*np.cos(angle_x*np.pi/180)-carbons[int(C2)].position[1]*np.sin(angle_x*np.pi/180) < 0:
+        elif rotated_x < 0:
             angle = 180+angle_x
+        else:
+            angle = angle_x
     else:
         print("ERROR: Wrong axis specified. Needs to be \"x\" or \"y\"!")
         exit()
@@ -202,10 +217,10 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
         color = [0, 255, 255]
         distance = carbons.get_distance(e1, e2)
         distances_opt.append((distance-d_opt)**2)
-        if distance < d_opt:
+        if distance <= d_opt:
             factor = 2
             digit = 2
-        if distance > d_opt:
+        else:
             factor = 1
             digit = 1
         if distance > d_opt+0.1:
@@ -290,24 +305,29 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
     plt.savefig(filename, transparent=True)
     #plt.show()
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Calculate and plot HOMA values from atomic coordinates')
-    parser.add_argument('Coordinates',type=str,help='File from which to load atomic coordinates')
+def main():
+    """CLI entry point registered in pyproject.toml [project.scripts]."""
+    parser = argparse.ArgumentParser(
+        description='Calculate and plot HOMA values from atomic coordinates',
+        epilog='Example: plotHOMA_withPBC coords.xyz --pbc --rings 0 1 2 3 4 5')
+    parser.add_argument('Coordinates', type=str, help='File from which to load atomic coordinates')
     parser.add_argument('--file', help='Filename which is plotted', default='Coordinates.svg')
     parser.add_argument('--C1', help='Carbon atom which is centered', default=3)
     parser.add_argument('--C2', help='Carbon atom which is aligned', default=4)
-    parser.add_argument('--axis', help='Axis on which two carbons atoms are aligned (\"x\"->horizaontal or \"y\"->vertical)', default="y")
-    parser.add_argument('--d_opt', help='Optimal Benzene bond length', type=float, default=1.398)
-    parser.add_argument('--norm', help='Normalization constant so that HOMA of 1,3,5-Cyclohexatriene is 0', type=float, default=362.9)
-    parser.add_argument('--pbc_cutoff', help='Cutoff, for which carbon atoms outside of pbc cell are considered (increase if not all rings were used)', type=float, default=2.8)
+    parser.add_argument('--axis', help='Axis on which two carbon atoms are aligned ("x" or "y")', default="y")
+    parser.add_argument('--d_opt', help='Optimal benzene bond length', type=float, default=1.398)
+    parser.add_argument('--norm', help='Normalization constant so that HOMA of 1,3,5-cyclohexatriene is 0', type=float, default=362.9)
+    parser.add_argument('--pbc_cutoff', help='PBC cutoff for atoms outside cell', type=float, default=2.8)
     parser.add_argument('--pbc', help='Use periodic boundary conditions', action='store_true')
     parser.add_argument('--no_values', help='Plot no HOMA values inside rings', action='store_true')
-    parser.add_argument('--rings', help='Manually specify rings', nargs='+', action='append', default=[]),
-    parser.add_argument('--max_ring_len', help='Maximum length of ring that is considered (may HEAVILY reduce time for large molecules)', type=int, default=8)
-    parser.add_argument('--no_of_cyc_combs', help='Maximum number of cycle combinations to obtain SSSR (may reduce time for large molecules, small number if max_ring_len is set)', type=int, default=4)
-    parser.add_argument('--atom_types', help='Manually specify atom types (Note: optimal CC bond length is applied to CX bond!)', nargs='+', action='store', default=["C"])
+    parser.add_argument('--rings', help='Manually specify rings', nargs='+', action='append', default=[])
+    parser.add_argument('--max_ring_len', help='Maximum ring length to consider', type=int, default=8)
+    parser.add_argument('--no_of_cyc_combs', help='Maximum number of cycle combinations for SSSR', type=int, default=4)
+    parser.add_argument('--atom_types', help='Atom types to consider', nargs='+', action='store', default=["C"])
     args = parser.parse_args()
-    #start_time = timeit.default_timer()
-    main(args.Coordinates, args.file, args.C1, args.C2, args.axis, args.d_opt, args.norm, args.rings, args.pbc_cutoff, args.max_ring_len, args.no_of_cyc_combs, args.atom_types, args.pbc, args.no_values)
-    #stop_time = timeit.default_timer()
-    #print('Time: ', np.round(stop_time - start_time,2), "s")  
+    run(args.Coordinates, args.file, args.C1, args.C2, args.axis, args.d_opt,
+        args.norm, args.rings, args.pbc_cutoff, args.max_ring_len,
+        args.no_of_cyc_combs, args.atom_types, args.pbc, args.no_values)
+
+if __name__ == '__main__':
+    main()

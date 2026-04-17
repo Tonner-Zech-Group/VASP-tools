@@ -1077,3 +1077,216 @@ def test_read_frequency_from_outcar():
     assert len(freq_data) == 2
     assert freq_data[0] == pytest.approx([0.1, 0.2, 0.3])
     assert freq_data[1] == pytest.approx([-0.1, -0.2, -0.3])
+
+
+# ===========================================================================
+# split_surf_and_mol
+# ===========================================================================
+
+def _make_slab_with_molecule():
+    """Create a 3x3 Cu(100) 2-layer slab (9 atoms/layer) with CO on top."""
+    from ase import Atoms
+    positions = []
+    # Layer 1 at z=0, 3x3 grid
+    for i in range(3):
+        for j in range(3):
+            positions.append([i * 2.55, j * 2.55, 0.0])
+    # Layer 2 at z=1.8, 3x3 grid offset
+    for i in range(3):
+        for j in range(3):
+            positions.append([i * 2.55 + 1.275, j * 2.55 + 1.275, 1.8])
+    # CO molecule on top
+    positions.append([3.825, 3.825, 5.0])
+    positions.append([3.825, 3.825, 6.13])
+    symbols = ['Cu'] * 18 + ['C', 'O']
+    cell = [7.65, 7.65, 25.0]
+    return Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+
+
+def test_detect_surf_separates_slab_and_molecule():
+    """detect_surf() must assign Cu to surface and C,O to molecule."""
+    from tools4vasp.split_surf_and_mol import detect_surf
+    atoms = _make_slab_with_molecule()
+    surf, mol = detect_surf(atoms, plot=False)
+    assert len(surf) == 18
+    assert len(mol) == 2
+    assert set(mol.get_chemical_symbols()) == {'C', 'O'}
+    assert set(surf.get_chemical_symbols()) == {'Cu'}
+
+
+def test_detect_surf_preserves_tags():
+    """detect_surf() must store original indices in atom tags."""
+    from tools4vasp.split_surf_and_mol import detect_surf
+    atoms = _make_slab_with_molecule()
+    surf, mol = detect_surf(atoms, plot=False)
+    all_tags = sorted(list(surf.get_tags()) + list(mol.get_tags()))
+    assert all_tags == list(range(20))
+
+
+def test_count_z_voxels_using_window():
+    """count_z_voxels_using_window() must count atoms in z-windows."""
+    from tools4vasp.split_surf_and_mol import count_z_voxels_using_window
+    z_coords = [0.0, 0.0, 0.0, 5.0, 5.0, 5.0]
+    points, counts = count_z_voxels_using_window(20.0, 0.5, 1.0, z_coords)
+    assert counts[0] == 3
+
+
+def test_find_plateaus_with_known_data():
+    """find_plateaus() must identify consecutive equal non-zero values."""
+    from tools4vasp.split_surf_and_mol import find_plateaus
+    data = [0, 0, 3, 3, 3, 0, 0, 2, 2, 0]
+    plateaus, heights = find_plateaus(data)
+    assert len(plateaus) == 2
+    assert plateaus[0] == (2, 4)
+    assert heights[0] == 3
+
+
+def test_split_surf_and_mol_run(tmp_path, monkeypatch):
+    """run() must write POSCAR_surf and POSCAR_mol."""
+    from tools4vasp.split_surf_and_mol import run
+    atoms = _make_slab_with_molecule()
+    poscar = tmp_path / "POSCAR"
+    atoms.write(str(poscar), format='vasp')
+    monkeypatch.chdir(tmp_path)
+    surf, mol = run(str(poscar))
+    assert (tmp_path / "POSCAR_surf").is_file()
+    assert (tmp_path / "POSCAR_mol").is_file()
+    assert len(surf) == 18
+    assert len(mol) == 2
+
+
+def test_split_surf_and_mol_main_cli(tmp_path, monkeypatch):
+    """main() must parse sys.argv and produce output files."""
+    from tools4vasp.split_surf_and_mol import main
+    atoms = _make_slab_with_molecule()
+    poscar = tmp_path / "POSCAR"
+    atoms.write(str(poscar), format='vasp')
+    monkeypatch.chdir(tmp_path)
+    with patch("sys.argv", ["split_surf_and_mol", str(poscar)]):
+        main()
+    assert (tmp_path / "POSCAR_surf").is_file()
+    assert (tmp_path / "POSCAR_mol").is_file()
+
+
+# ===========================================================================
+# xyz2POSCAR
+# ===========================================================================
+
+_POSCAR_CUBIC_H = """\
+H atom in cubic box
+1.0
+10.0  0.0  0.0
+ 0.0 10.0  0.0
+ 0.0  0.0 10.0
+H
+1
+Cartesian
+0.0 0.0 0.0
+"""
+
+_XYZ_BENZENE = """\
+6
+benzene
+C  0.000  1.398  0.000
+C  1.210  0.699  0.000
+C  1.210 -0.699  0.000
+C  0.000 -1.398  0.000
+C -1.210 -0.699  0.000
+C -1.210  0.699  0.000
+"""
+
+
+def test_xyz2poscar_run_basic(tmp_path):
+    """run() must write a VASP POSCAR from an xyz and cell source."""
+    from tools4vasp.xyz2POSCAR import run
+    xyz = tmp_path / "mol.xyz"
+    xyz.write_text(_XYZ_BENZENE)
+    poscar = tmp_path / "POSCAR"
+    poscar.write_text(_POSCAR_CUBIC_H)
+    out = str(tmp_path / "POSCAR_new")
+    run(str(xyz), str(poscar), out, rot=False, cen=False, sor=False, const=False)
+    assert (tmp_path / "POSCAR_new").is_file()
+    content = (tmp_path / "POSCAR_new").read_text()
+    assert "C" in content
+
+
+def test_xyz2poscar_run_with_rotation(tmp_path):
+    """run() with rot=True must produce output without error."""
+    from tools4vasp.xyz2POSCAR import run
+    xyz = tmp_path / "mol.xyz"
+    xyz.write_text(_XYZ_BENZENE)
+    poscar = tmp_path / "POSCAR"
+    poscar.write_text(_POSCAR_CUBIC_H)
+    out = str(tmp_path / "POSCAR_new")
+    run(str(xyz), str(poscar), out, rot=True, cen=True, sor=True, const=False)
+    assert (tmp_path / "POSCAR_new").is_file()
+
+
+def test_xyz2poscar_run_with_constraints(tmp_path):
+    """run() with const=True must add selective dynamics."""
+    from tools4vasp.xyz2POSCAR import run
+    xyz = tmp_path / "mol.xyz"
+    xyz.write_text(_XYZ_BENZENE)
+    poscar = tmp_path / "POSCAR"
+    poscar.write_text(_POSCAR_CUBIC_H)
+    out = str(tmp_path / "POSCAR_new")
+    run(str(xyz), str(poscar), out, rot=False, cen=False, sor=False, const=True)
+    content = (tmp_path / "POSCAR_new").read_text()
+    assert "Selective" in content or "F" in content
+
+
+def test_xyz2poscar_main_cli(tmp_path):
+    """main() must parse sys.argv and call run()."""
+    from tools4vasp.xyz2POSCAR import main
+    xyz = tmp_path / "mol.xyz"
+    xyz.write_text(_XYZ_BENZENE)
+    poscar = tmp_path / "POSCAR"
+    poscar.write_text(_POSCAR_CUBIC_H)
+    out = str(tmp_path / "POSCAR_new")
+    with patch("sys.argv", ["xyz2POSCAR", str(xyz), str(poscar),
+                            "--outfile", out, "--no_rotation_to_xy"]):
+        main()
+    assert (tmp_path / "POSCAR_new").is_file()
+
+
+# ===========================================================================
+# plotHOMA_withPBC
+# ===========================================================================
+
+def test_plotHOMA_benzene_with_rings(tmp_path):
+    """run() on benzene with manually specified ring must not error."""
+    from tools4vasp.plotHOMA_withPBC import run
+    coords = tmp_path / "benzene.xyz"
+    coords.write_text(_XYZ_BENZENE)
+    outfile = str(tmp_path / "homa.svg")
+    with patch("tools4vasp.plotHOMA_withPBC.plt") as mock_plt:
+        run(str(coords), outfile, C1=0, C2=1, a="y",
+            d_opt=1.398, norm=362.9, rings=[[0, 1, 2, 3, 4, 5]],
+            pbc_cutoff=2.8, max_path_len=8, no_of_cyc_combs=4,
+            atom_types=["C"], pbc=False, no_values=False)
+    mock_plt.savefig.assert_called_once()
+
+
+def test_plotHOMA_empty_cycles_error(tmp_path):
+    """run() must exit when no cycles are found in an acyclic system."""
+    from tools4vasp.plotHOMA_withPBC import run
+    isolated = tmp_path / "isolated.xyz"
+    isolated.write_text("2\nisolated\nC 0.0 0.0 0.0\nC 10.0 10.0 10.0\n")
+    with patch("tools4vasp.plotHOMA_withPBC.plt"), \
+         pytest.raises(SystemExit):
+        run(str(isolated), str(tmp_path / "out.svg"), C1=0, C2=1, a="y",
+            d_opt=1.398, norm=362.9, rings=[],
+            pbc_cutoff=2.8, max_path_len=8, no_of_cyc_combs=4,
+            atom_types=["C"], pbc=False, no_values=False)
+
+
+def test_plotHOMA_main_cli(tmp_path):
+    """main() must parse sys.argv and call run()."""
+    from tools4vasp.plotHOMA_withPBC import main
+    coords = tmp_path / "benzene.xyz"
+    coords.write_text(_XYZ_BENZENE)
+    outfile = str(tmp_path / "homa.svg")
+    with patch("tools4vasp.plotHOMA_withPBC.plt"), \
+         patch("sys.argv", ["plotHOMA_withPBC", str(coords), "--file", outfile,
+                            "--rings", "0", "1", "2", "3", "4", "5"]):
+        main()
