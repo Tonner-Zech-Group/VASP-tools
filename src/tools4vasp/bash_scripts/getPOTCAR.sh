@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# The only thing you need to change: The path to the POTCARs!
-POTDIR='/PUT/PATH/TO/POTCARS/HERE/'
+# Path to VASP pseudopotentials — uses the standard VASP_PP_PATH environment variable
+# (also used by ASE, pymatgen, VTST, etc.)
+if [ -z "${VASP_PP_PATH:-}" ]; then
+    printf "\n\e[38;5;1m* Error: VASP_PP_PATH environment variable is not set.\e[0m\n"
+    printf "  Set it to the directory containing your VASP pseudopotentials, e.g.:\n"
+    printf "  export VASP_PP_PATH=/path/to/potpaw_PBE\n\n"
+    exit 1
+fi
+POTDIR="${VASP_PP_PATH%/}/"
 
 # Some general variables 
 myPWD=$(pwd)
@@ -11,7 +18,7 @@ decision='0'
 function usage
 {
     echo " "
-    echo "* DESCRIPTION :  This scripts reads the POSCAR file and creats the POTCAR file of corresponding elements in order."
+    echo "* DESCRIPTION :  This script reads the POSCAR file and creates the POTCAR file of corresponding elements in order."
     echo " "
     echo "* USAGE: $(basename "$0") [-h|--help|-rnspdbcSHgG]"
     echo "  -h | --help :  For help."
@@ -28,7 +35,7 @@ function usage
     echo "  -G          :  If you want the _sv_GW extension of the POTCAR (see _sv & _GW)"
     echo " "
     echo "* IMPORTANT   :  It uses the following extensions as the recommended default potentials (-r):"
-    echo "  None        :  H, He, Be, B, C, N, O, F, Ne, Mg, Al, Si, P, S, Cl, Ar, Fr, Co,"
+    echo "  None        :  H, He, Be, B, C, N, O, F, Ne, Mg, Al, Si, P, S, Cl, Ar, Co,"
     echo "                 Ni, Cu, Zn, As, Se, Br, Kr, Pd, Ag, Cd, Sb, Te, I, Xe, La, Ce,"
     echo "                 Re, Os, Ir, Pt, Au, Hg, At, Rn, Ac, Th, Pa, U, Np, Pu, Am, Cm"
     echo "  sv          :  Li, K, Ca, Sc, Ti, V, Rb, Sr, Y, Zr, Nb, Mo, Cs, Ba, W, Fr, Ra"
@@ -37,8 +44,8 @@ function usage
     echo "  2           :  Eu, Yb"
     echo "  3           :  Pr, Nd, Pm, Sm, Gd, Tb, Dy, Ho, Er, Tm, Lu"
     echo " "
-    echo "* NOTE        :  To create the POTCAR you must need the POSCAR file. You first have to move to"
-    echo "                 the folder that contains the POSCAR. It can't create POTCAR from external path."
+    echo "* NOTE        :  Requires the VASP_PP_PATH environment variable to point to the pseudopotential directory."
+    echo "                 You must run this from the folder that contains the POSCAR."
     echo " "
     echo "---------------  Enjoy. Have a good day.  ---------------"
     echo " "
@@ -95,7 +102,7 @@ fi
 
 # Definition of recommended default options
 declare -A element_group=(
-    [H]="" [He]="" [Be]="" [B]="" [C]="" [N]="" [O]="" [F]="" [Ne]="" [Mg]="" [Al]="" [Si]="" [P]="" [S]="" [Cl]="" [Ar]="" [Fr]="" [Co]="" [Ni]="" [Cu]="" [Zn]="" [As]="" [Se]="" [Br]="" [Kr]=""
+    [H]="" [He]="" [Be]="" [B]="" [C]="" [N]="" [O]="" [F]="" [Ne]="" [Mg]="" [Al]="" [Si]="" [P]="" [S]="" [Cl]="" [Ar]="" [Co]="" [Ni]="" [Cu]="" [Zn]="" [As]="" [Se]="" [Br]="" [Kr]=""
     [Pd]="" [Ag]="" [Cd]="" [Sb]="" [Te]="" [I]="" [Xe]="" [La]="" [Ce]="" [Re]="" [Os]="" [Ir]="" [Pt]="" [Au]="" [Hg]="" [At]="" [Rn]="" [Ac]="" [Th]="" [Pa]="" [U]="" [Np]="" [Pu]="" [Am]="" [Cm]=""
     [Li]="_sv" [K]="_sv" [Ca]="_sv" [Sc]="_sv" [Ti]="_sv" [V]="_sv" [Rb]="_sv" [Sr]="_sv" [Y]="_sv" [Zr]="_sv" [Nb]="_sv" [Mo]="_sv" [Cs]="_sv" [Ba]="_sv" [W]="_sv" [Fr]="_sv" [Ra]="_sv"
     [Na]="_pv" [Cr]="_pv" [Mn]="_pv" [Tc]="_pv" [Ru]="_pv" [Rh]="_pv" [Hf]="_pv" [Ta]="_pv"
@@ -130,5 +137,6 @@ if [ -f POSCAR ]; then # Check if POSCAR exists
     done
 else
     printf "\n\e[38;5;1m* Error: No POSCAR file here! POSCAR file is mandatory. Please move to the file containing the POSCAR. \e[0m\n\n"
+    exit 1
 fi
 
