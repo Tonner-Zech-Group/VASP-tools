@@ -39,6 +39,7 @@ pip install -e .
 | [matplotlib](https://matplotlib.org/) | Plotting |
 | [natsort](https://github.com/SethMMorris/natsort) | Natural-sort for folder discovery |
 | [numpy](https://numpy.org/) | Numerical operations |
+| [SciPy](https://scipy.org/) | Plane fitting for surface/molecule tools |
 
 Optional dependencies (not installed automatically):
 
@@ -132,6 +133,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 | `kspacing2kgrid` | Get k-point grid for a given KSPACING and the current POSCAR. | `kspacing2kgrid 0.15` |
 | `mixed_interpolate` | Geodesic interpolation for the molecule + IDPP for the surface. | `mixed_interpolate` |
 | `poscar2nbands` | Compute the recommended NBANDS for LOBSTER from POSCAR/INCAR/POTCAR. | `poscar2nbands` |
+| `split_surf_and_mol` | Split an adsorbate-surface complex into surface and molecule structures. | `split_surf_and_mol POSCAR` |
 | `xyz2POSCAR` | Insert molecule from .xyz file into a cell from a POSCAR. | `xyz2POSCAR mol.xyz POSCAR_with_cell` |
 
 ## Post-processing tools
