@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# The only thing you need to change: The path to the POTCARs!
-POTDIR='/PUT/PATH/TO/POTCARS/HERE/'
+# Path to VASP pseudopotentials — uses the standard VASP_PP_PATH environment variable
+# (also used by ASE, pymatgen, VTST, etc.)
+if [ -z "${VASP_PP_PATH:-}" ]; then
+    printf "\n\e[38;5;1m* Error: VASP_PP_PATH environment variable is not set.\e[0m\n"
+    printf "  Set it to the directory containing your VASP pseudopotentials, e.g.:\n"
+    printf "  export VASP_PP_PATH=/path/to/potpaw_PBE\n\n"
+    exit 1
+fi
+POTDIR="${VASP_PP_PATH%/}/"
 
 # Some general variables 
 myPWD=$(pwd)
@@ -37,8 +44,8 @@ function usage
     echo "  2           :  Eu, Yb"
     echo "  3           :  Pr, Nd, Pm, Sm, Gd, Tb, Dy, Ho, Er, Tm, Lu"
     echo " "
-    echo "* NOTE        :  To create the POTCAR you must need the POSCAR file. You first have to move to"
-    echo "                 the folder that contains the POSCAR. It can't create POTCAR from external path."
+    echo "* NOTE        :  Requires the VASP_PP_PATH environment variable to point to the pseudopotential directory."
+    echo "                 You must run this from the folder that contains the POSCAR."
     echo " "
     echo "---------------  Enjoy. Have a good day.  ---------------"
     echo " "

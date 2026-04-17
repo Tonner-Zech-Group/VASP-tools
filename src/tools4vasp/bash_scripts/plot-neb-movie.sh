@@ -2,6 +2,16 @@
 # Use VMD and plotNEB.py to create images for NEB curve presentation
 #set -e
 
+# Auto-detect Tachyon renderer path from VMD installation
+if [ -n "${TACHYON_PATH:-}" ]; then
+    TACHYON_BIN="$TACHYON_PATH"
+elif command -v tachyon &>/dev/null; then
+    TACHYON_BIN="$(command -v tachyon)"
+else
+    # Fall back to common VMD installation path
+    TACHYON_BIN="/usr/local/vmd/lib/vmd/tachyon_LINUXAMD64"
+fi
+
 echo "Plotting Data..."
 nImages=$(plotNEB --presentation --file NEB_presentations.png --plotall | tail -1 | cut -d" " -f1)
 echo "Processing ${nImages} images."
@@ -15,7 +25,7 @@ if tail -1 movie.vmd | grep -iq "quit"
 then
    echo "movie.vmd already appended, skipping"
 else
-   echo "render options Tachyon '/usr/local/vmd/lib/vmd/tachyon_LINUXAMD64 -aasamples 12 %s -format TARGA'" >> movie.vmd
+   echo "render options Tachyon '${TACHYON_BIN} -aasamples 12 %s -format TARGA'" >> movie.vmd
    for (( i=0; i<nImages; i++ ))
    do
       echo "animate goto ${i}" >> movie.vmd
