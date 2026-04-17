@@ -132,6 +132,9 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
 
         # Smallest Set of Smallest Rings is found by appending smallest cycle
         # if it is not a linear combination of previosly appendet smallest cycles
+        if not cycles:
+            print("ERROR: No cycles found in the molecular graph. Check your input or specify rings manually with --rings.")
+            exit()
         SSSR = [cycles[0]]
         SSSR_edges = [edges_of_cycles[0]]
         for pos,i in enumerate(edges_of_cycles):
@@ -214,10 +217,10 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
         color = [0, 255, 255]
         distance = carbons.get_distance(e1, e2)
         distances_opt.append((distance-d_opt)**2)
-        if distance < d_opt:
+        if distance <= d_opt:
             factor = 2
             digit = 2
-        if distance > d_opt:
+        else:
             factor = 1
             digit = 1
         if distance > d_opt+0.1:
@@ -314,7 +317,7 @@ if __name__ == "__main__":
     parser.add_argument('--pbc_cutoff', help='Cutoff, for which carbon atoms outside of pbc cell are considered (increase if not all rings were used)', type=float, default=2.8)
     parser.add_argument('--pbc', help='Use periodic boundary conditions', action='store_true')
     parser.add_argument('--no_values', help='Plot no HOMA values inside rings', action='store_true')
-    parser.add_argument('--rings', help='Manually specify rings', nargs='+', action='append', default=[]),
+    parser.add_argument('--rings', help='Manually specify rings', nargs='+', action='append', default=[])
     parser.add_argument('--max_ring_len', help='Maximum length of ring that is considered (may HEAVILY reduce time for large molecules)', type=int, default=8)
     parser.add_argument('--no_of_cyc_combs', help='Maximum number of cycle combinations to obtain SSSR (may reduce time for large molecules, small number if max_ring_len is set)', type=int, default=4)
     parser.add_argument('--atom_types', help='Manually specify atom types (Note: optimal CC bond length is applied to CX bond!)', nargs='+', action='store', default=["C"])

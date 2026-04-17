@@ -11,7 +11,7 @@ decision='0'
 function usage
 {
     echo " "
-    echo "* DESCRIPTION :  This scripts reads the POSCAR file and creats the POTCAR file of corresponding elements in order."
+    echo "* DESCRIPTION :  This script reads the POSCAR file and creates the POTCAR file of corresponding elements in order."
     echo " "
     echo "* USAGE: $(basename "$0") [-h|--help|-rnspdbcSHgG]"
     echo "  -h | --help :  For help."
@@ -28,7 +28,7 @@ function usage
     echo "  -G          :  If you want the _sv_GW extension of the POTCAR (see _sv & _GW)"
     echo " "
     echo "* IMPORTANT   :  It uses the following extensions as the recommended default potentials (-r):"
-    echo "  None        :  H, He, Be, B, C, N, O, F, Ne, Mg, Al, Si, P, S, Cl, Ar, Fr, Co,"
+    echo "  None        :  H, He, Be, B, C, N, O, F, Ne, Mg, Al, Si, P, S, Cl, Ar, Co,"
     echo "                 Ni, Cu, Zn, As, Se, Br, Kr, Pd, Ag, Cd, Sb, Te, I, Xe, La, Ce,"
     echo "                 Re, Os, Ir, Pt, Au, Hg, At, Rn, Ac, Th, Pa, U, Np, Pu, Am, Cm"
     echo "  sv          :  Li, K, Ca, Sc, Ti, V, Rb, Sr, Y, Zr, Nb, Mo, Cs, Ba, W, Fr, Ra"

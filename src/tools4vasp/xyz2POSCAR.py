@@ -29,8 +29,6 @@ def main(xyz, poscar, out, rot, cen, sor, const):
         mol_coords = mol.get_positions()
         plane_guess = [0.1, 0.1, 0.1, 0.1]
         solution = leastsq(distance_to_plane, plane_guess, args=(mol_coords.T,), maxfev=100000)[0]
-        a = solution[0]/max(solution)
-        b = solution[1]/max(solution)
         norm_val = solution[np.argmax(np.abs(solution))]
         a = solution[0]/norm_val
         b = solution[1]/norm_val
@@ -55,14 +53,14 @@ def main(xyz, poscar, out, rot, cen, sor, const):
         mol = sort(mol)
     if const:
         mol.set_constraint(FixAtoms(indices=[atom.index for atom in mol]))
-    mol.write(out)
+    mol.write(out, format='vasp')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert a Molecule saved in xyz into a new POSCAR with the Cell of POSCAR')
     parser.add_argument('xyz_file', type=str, help='Coordinates from xyz File')
     parser.add_argument('cell_from_POSCAR', type=str, help='Cell from POSCAR File')
     parser.add_argument('--outfile', help='Name of new POSCAR', default='POSCAR_new')
-    parser.add_argument('--no_rotation_to_xy', help='DON\'T Molacular Plane into XY Plane', action='store_false')
+    parser.add_argument('--no_rotation_to_xy', help='DON\'T rotate Molecular Plane into XY Plane', action='store_false')
     parser.add_argument('--no_center', help='DON\'T Center Atoms in Cell', action='store_false')
     parser.add_argument('--no_sort', help='DON\'T Sort Atom Labels', action='store_false')
     parser.add_argument('--constrain', help='Fix all Atom Positions', action='store_true')
