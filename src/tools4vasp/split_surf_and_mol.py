@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 #
-# Script to split an adsorbate-surface-complex into surface and molecule. 
+# Script to split an adsorbate-surface-complex into surface and molecule.
 # by Jakob Schramm
 # 2026/04/09
 #
@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def count_z_voxels_using_window(z_cell,step,window,z_coords):
-    # Function that screens z_coordinates and counts occurenes using a sliding window
+    # Function that screens z_coordinates and counts occurrences using a sliding window
     points = list(np.arange(0.0, z_cell, step)) + [z_cell]
     counts = []
     for pos in range(len(points)):
@@ -38,7 +38,7 @@ def find_plateaus(data):
     return plateaus, plat_height
 
 def add_low_peaks(counts, plateaus, plat_height):
-    # Function that adds peaks (all atoms at same height and below dirst step of 0.05 so that they are not captured by sliding window) that are at the bottom of slab
+    # Function that adds peaks (all atoms at same height and below first step of 0.05 so that they are not captured by sliding window) that are at the bottom of slab
     for i,height in enumerate(counts[:10]): ### to include peaks at the bottom of the slab (< 0.5 Å)
         if height > 0 and not any(start <= i <= end for start, end in plateaus):
             plateaus.insert(0,(i,i))
@@ -102,7 +102,7 @@ def detect_surf(initial_mol,plot=False):
     Main function for detecting the surface and the molecule.
     Makes use of layered structure of surface and tolerates minor distortions,
     includes saturation layer at the bottom of slab (between 0 and 0.5 Å), 
-    but otherwise assumes more then one layer and at least 9 atoms (3x3) or one twentieth of all atoms to be in one layer.
+    but otherwise assumes more than one layer and at least 9 atoms (3x3) or one twentieth of all atoms to be in one layer.
     
     Returns:
         Two ase.Atoms objects - surf that contains surface and mol that contains molecule.
