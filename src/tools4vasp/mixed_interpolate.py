@@ -12,7 +12,7 @@ from ase.visualize import view
 from pathlib import Path
 from geodesic_interpolate.interpolation import redistribute
 from geodesic_interpolate.geodesic import Geodesic
-from split_surf_and_mol import detect_surf
+from tools4vasp.split_surf_and_mol import detect_surf
 import numpy as np
 from scipy.optimize import leastsq
 
