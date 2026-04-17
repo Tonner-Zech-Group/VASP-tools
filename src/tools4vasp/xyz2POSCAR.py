@@ -28,7 +28,7 @@ def main(xyz, poscar, out, rot, cen, sor, const):
     if rot:
         mol_coords = mol.get_positions()
         plane_guess = [0.1, 0.1, 0.1, 0.1]
-        solution = leastsq(distance_to_plane, plane_guess, args=(mol_coords.T), maxfev=100000)[0]
+        solution = leastsq(distance_to_plane, plane_guess, args=(mol_coords.T,), maxfev=100000)[0]
         a = solution[0]/max(solution)
         b = solution[1]/max(solution)
         norm_val = solution[np.argmax(np.abs(solution))]
