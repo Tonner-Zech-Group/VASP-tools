@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Script to caclulate and plot values of the Harmonic Oscillator Model of Aromaticiy (HOMA),
+# Script to calculate and plot values of the Harmonic Oscillator Model of Aromaticity (HOMA),
 # including a simple workaround to plot periodic boundary conditions 
 # by Jakob Schramm
 # 2026/03/26
