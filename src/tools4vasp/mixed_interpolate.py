@@ -100,7 +100,7 @@ def rotate_to_XYplane(image,surf_indices):
     #Function that fits a plane to the surface atoms and returns a rotation matrix to the XY plane, by J. Schramm
     surf_coords = image[surf_indices].get_positions()
     plane_guess = [0.1, 0.1, 0.1, 0.1]
-    solution = leastsq(distance_to_plane, plane_guess, args=(surf_coords.T), maxfev=100000)[0]
+    solution = leastsq(distance_to_plane, plane_guess, args=(surf_coords.T,), maxfev=100000)[0]
     a = solution[0]/max(solution)
     b = solution[1]/max(solution)
     norm_val = solution[np.argmax(np.abs(solution))]
