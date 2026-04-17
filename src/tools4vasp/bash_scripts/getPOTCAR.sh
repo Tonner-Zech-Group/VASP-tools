@@ -130,5 +130,6 @@ if [ -f POSCAR ]; then # Check if POSCAR exists
     done
 else
     printf "\n\e[38;5;1m* Error: No POSCAR file here! POSCAR file is mandatory. Please move to the file containing the POSCAR. \e[0m\n\n"
+    exit 1
 fi
 
