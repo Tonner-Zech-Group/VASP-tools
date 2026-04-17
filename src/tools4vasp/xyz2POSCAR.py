@@ -36,13 +36,17 @@ def main(xyz, poscar, out, rot, cen, sor, const):
         b = solution[1]/norm_val
         c = solution[2]/norm_val
         # d = solution[3]/max(solution)
-        cos_angle = c/np.sqrt(a**2+b**2+c**2)
-        sin_angle = np.sqrt((a**2+b**2)/(a**2+b**2+c**2))
-        u1 = b/np.sqrt(a**2+b**2)
-        u2 = -a/np.sqrt(a**2+b**2)
-        R_matrix = np.array([[cos_angle+(u1**2)*(1-cos_angle), u1*u2*(1-cos_angle),           u2*sin_angle],
-                             [u1*u2*(1-cos_angle),           cos_angle+(u2**2)*(1-cos_angle), -u1*sin_angle],
-                             [-u2*sin_angle,                 u1*sin_angle,                  cos_angle]])
+        axis_norm = np.sqrt(a**2+b**2)
+        if np.isclose(axis_norm, 0.0):
+            R_matrix = np.eye(3)
+        else:
+            cos_angle = c/np.sqrt(a**2+b**2+c**2)
+            sin_angle = np.sqrt((a**2+b**2)/(a**2+b**2+c**2))
+            u1 = b/axis_norm
+            u2 = -a/axis_norm
+            R_matrix = np.array([[cos_angle+(u1**2)*(1-cos_angle), u1*u2*(1-cos_angle),           u2*sin_angle],
+                                 [u1*u2*(1-cos_angle),           cos_angle+(u2**2)*(1-cos_angle), -u1*sin_angle],
+                                 [-u2*sin_angle,                 u1*sin_angle,                  cos_angle]])
         for index,atom in enumerate(mol):
             atom.position = R_matrix.dot(mol_coords[index])
     if cen:
