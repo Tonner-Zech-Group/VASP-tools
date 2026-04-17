@@ -108,10 +108,13 @@ def rotate_to_XYplane(image,surf_indices):
     b = solution[1]/norm_val
     c = solution[2]/norm_val
     #d = solution[3]/max(solution)
+    axis_norm = np.sqrt(a**2+b**2)
+    if np.isclose(axis_norm, 0.0):
+        return np.eye(3)
     cos_angle = c/np.sqrt(a**2+b**2+c**2)
     sin_angle = np.sqrt((a**2+b**2)/(a**2+b**2+c**2))
-    u1 = b/np.sqrt(a**2+b**2)
-    u2 = -a/np.sqrt(a**2+b**2)
+    u1 = b/axis_norm
+    u2 = -a/axis_norm
     R_matrix = np.array([[cos_angle+(u1**2)*(1-cos_angle), u1*u2*(1-cos_angle),           u2*sin_angle],
                             [u1*u2*(1-cos_angle),           cos_angle+(u2**2)*(1-cos_angle), -u1*sin_angle],
                             [-u2*sin_angle,                 u1*sin_angle,                  cos_angle]])
