@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Scipt that mixes geodesic interpolation for the molecule and idpp/direct interpolation for the surface
+# Script that mixes geodesic interpolation for the molecule and idpp/direct interpolation for the surface
 # by F. Thiemann & J. Schramm
 
 from ase.io import read
