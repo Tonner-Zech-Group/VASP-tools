@@ -149,6 +149,7 @@ that OIDC requires.
 | `matplotlib` | All plotting tools |
 | `natsort` | Natural-sort for run-folder discovery |
 | `numpy` | Numerical operations |
+| `scipy` | Plane fitting for surface/molecule splitting and XY-rotation |
 
 Optional (not installed in CI):
 - `geodesic-interpolate` — required by `mixed_interpolate`
