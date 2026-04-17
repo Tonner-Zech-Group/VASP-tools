@@ -37,7 +37,7 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
         for x in [0, 1, -1]:
             for y in [0, 1, -1]:
                 for atom in carbons:
-                    new_copy = Atoms("C", [list(atom.position+x*cell[0]+y*cell[1])])
+                    new_copy = Atoms(atom.symbol, [list(atom.position+x*cell[0]+y*cell[1])])
                     if (list(atom.position+x*cell[0]+y*cell[1])[0] < max_X_coord+pbc_cutoff and
                         list(atom.position+x*cell[0]+y*cell[1])[0] > min_X_coord-pbc_cutoff and
                         list(atom.position+x*cell[0]+y*cell[1])[1] < max_Y_coord+pbc_cutoff and
