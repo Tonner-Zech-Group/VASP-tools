@@ -174,18 +174,30 @@ def main(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_p
     for atom in carbons:
         atom.position=atom.position - shift
 
-    angle_y = np.arctan(carbons[int(C2)].position[0]/carbons[int(C2)].position[1])*180/np.pi
-    angle_x = np.arctan(-carbons[int(C2)].position[1]/carbons[int(C2)].position[0])*180/np.pi
+    x = carbons[int(C2)].position[0]
+    y = carbons[int(C2)].position[1]
+    if np.isclose(x, 0.0) and np.isclose(y, 0.0):
+        print("ERROR: Cannot determine alignment angle because the selected alignment atom is at the origin!")
+        exit()
+
+    angle_y = np.degrees(np.arctan2(x, y))
+    angle_x = np.degrees(np.arctan2(-y, x))
     if a == "y":
-        if carbons[int(C2)].position[0]*np.sin(angle_y*np.pi/180)+carbons[int(C2)].position[1]*np.cos(angle_y*np.pi/180) < 0:
+        rotated_y = x*np.sin(angle_y*np.pi/180)+y*np.cos(angle_y*np.pi/180)
+        if rotated_y < 0:
             angle = angle_y
-        elif carbons[int(C2)].position[0]*np.sin(angle_y*np.pi/180)+carbons[int(C2)].position[1]*np.cos(angle_y*np.pi/180) > 0:
+        elif rotated_y > 0:
             angle = 180+angle_y
+        else:
+            angle = angle_y
     elif a == "x":
-        if carbons[int(C2)].position[0]*np.cos(angle_x*np.pi/180)-carbons[int(C2)].position[1]*np.sin(angle_x*np.pi/180) > 0:
+        rotated_x = x*np.cos(angle_x*np.pi/180)-y*np.sin(angle_x*np.pi/180)
+        if rotated_x > 0:
             angle = angle_x
-        elif carbons[int(C2)].position[0]*np.cos(angle_x*np.pi/180)-carbons[int(C2)].position[1]*np.sin(angle_x*np.pi/180) < 0:
+        elif rotated_x < 0:
             angle = 180+angle_x
+        else:
+            angle = angle_x
     else:
         print("ERROR: Wrong axis specified. Needs to be \"x\" or \"y\"!")
         exit()
