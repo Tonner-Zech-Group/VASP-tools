@@ -9,6 +9,12 @@ if [ -z "${VASP_PP_PATH:-}" ]; then
     exit 1
 fi
 POTDIR="${VASP_PP_PATH%/}/"
+if [[ "$POTDIR" != *"PBE"* ]]; then
+    printf "\n\e[38;5;9;4m* Warning:\e[0m Selected POTCARs are not designed for PBE functional! \n\n"
+fi
+if [[ "$POTDIR" != *".64"* ]]; then
+    printf "\n\e[38;5;9;4m* Warning:\e[0m Selected POTCARs are not from newest .64 dataset! \n\n"
+fi
 
 # Some general variables 
 myPWD=$(pwd)
@@ -34,10 +40,10 @@ function usage
     echo "  -g          :  If you want the _GW extension of the POTCAR (opt. for unoccupied states)"
     echo "  -G          :  If you want the _sv_GW extension of the POTCAR (see _sv & _GW)"
     echo " "
-    echo "* IMPORTANT   :  It uses the following extensions as the recommended default potentials (-r):"
-    echo "  None        :  H, He, Be, B, C, N, O, F, Ne, Mg, Al, Si, P, S, Cl, Ar, Co,"
+    echo "* IMPORTANT   :  It uses the following extensions as the recommended default potentials for the PBE functional (-r):"
+    echo "  None        :  H, He, Be, B, C, N, O, F, Ne, Mg, Al, Si, P, S, Cl, Ar, Fe, Co,"
     echo "                 Ni, Cu, Zn, As, Se, Br, Kr, Pd, Ag, Cd, Sb, Te, I, Xe, La, Ce,"
-    echo "                 Re, Os, Ir, Pt, Au, Hg, At, Rn, Ac, Th, Pa, U, Np, Pu, Am, Cm"
+    echo "                 Re, Os, Ir, Pt, Au, Hg, At, Rn, Ac, Th, Pa, U, Np, Pu, Am, Cm, (Cf)"
     echo "  sv          :  Li, K, Ca, Sc, Ti, V, Rb, Sr, Y, Zr, Nb, Mo, Cs, Ba, W, Fr, Ra"
     echo "  pv          :  Na, Cr, Mn, Tc, Ru, Rh, Hf, Ta"
     echo "  d           :  Ga, Ge, In, Sn, Tl, Pb, Bi, Po"
@@ -102,8 +108,8 @@ fi
 
 # Definition of recommended default options
 declare -A element_group=(
-    [H]="" [He]="" [Be]="" [B]="" [C]="" [N]="" [O]="" [F]="" [Ne]="" [Mg]="" [Al]="" [Si]="" [P]="" [S]="" [Cl]="" [Ar]="" [Co]="" [Ni]="" [Cu]="" [Zn]="" [As]="" [Se]="" [Br]="" [Kr]=""
-    [Pd]="" [Ag]="" [Cd]="" [Sb]="" [Te]="" [I]="" [Xe]="" [La]="" [Ce]="" [Re]="" [Os]="" [Ir]="" [Pt]="" [Au]="" [Hg]="" [At]="" [Rn]="" [Ac]="" [Th]="" [Pa]="" [U]="" [Np]="" [Pu]="" [Am]="" [Cm]=""
+    [H]="" [He]="" [Be]="" [B]="" [C]="" [N]="" [O]="" [F]="" [Ne]="" [Mg]="" [Al]="" [Si]="" [P]="" [S]="" [Cl]="" [Ar]="" [Fe]="" [Co]="" [Ni]="" [Cu]="" [Zn]="" [As]="" [Se]="" [Br]="" [Kr]=""
+    [Pd]="" [Ag]="" [Cd]="" [Sb]="" [Te]="" [I]="" [Xe]="" [La]="" [Ce]="" [Re]="" [Os]="" [Ir]="" [Pt]="" [Au]="" [Hg]="" [At]="" [Rn]="" [Ac]="" [Th]="" [Pa]="" [U]="" [Np]="" [Pu]="" [Am]="" [Cm]="" [Cf]=""
     [Li]="_sv" [K]="_sv" [Ca]="_sv" [Sc]="_sv" [Ti]="_sv" [V]="_sv" [Rb]="_sv" [Sr]="_sv" [Y]="_sv" [Zr]="_sv" [Nb]="_sv" [Mo]="_sv" [Cs]="_sv" [Ba]="_sv" [W]="_sv" [Fr]="_sv" [Ra]="_sv"
     [Na]="_pv" [Cr]="_pv" [Mn]="_pv" [Tc]="_pv" [Ru]="_pv" [Rh]="_pv" [Hf]="_pv" [Ta]="_pv"
     [Ga]="_d" [Ge]="_d" [In]="_d" [Sn]="_d" [Tl]="_d" [Pb]="_d" [Bi]="_d" [Po]="_d"
