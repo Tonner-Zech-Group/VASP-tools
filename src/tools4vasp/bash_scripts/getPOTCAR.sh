@@ -5,15 +5,25 @@
 if [ -z "${VASP_PP_PATH:-}" ]; then
     printf "\n\e[38;5;1m* Error: VASP_PP_PATH environment variable is not set.\e[0m\n"
     printf "  Set it to the directory containing your VASP pseudopotentials, e.g.:\n"
-    printf "  export VASP_PP_PATH=/path/to/potpaw_PBE\n\n"
+    printf "  export VASP_PP_PATH=/path/to/potpaw_PBE.64\n"
+    printf "  (ASE-style parent directory paths are also accepted.)\n\n"
     exit 1
 fi
 POTDIR="${VASP_PP_PATH%/}/"
-if [[ "$POTDIR" != *"PBE"* ]]; then
-    printf "\n\e[38;5;9;4m* Warning:\e[0m Selected POTCARs are not designed for PBE functional! \n\n"
-fi
-if [[ "$POTDIR" != *".64"* ]]; then
-    printf "\n\e[38;5;9;4m* Warning:\e[0m Selected POTCARs are not from newest .64 dataset! \n\n"
+
+# ASE compatibility: if VASP_PP_PATH points to a parent directory containing
+# potpaw_PBE* subdirectories (ASE convention), auto-resolve to the best match.
+if [ ! -d "${POTDIR}H" ] && [ ! -d "${POTDIR}Li" ]; then
+    best_match=""
+    for candidate in "${POTDIR}"potpaw_PBE*; do
+        if [ -d "$candidate" ]; then
+            best_match="$candidate"
+        fi
+    done
+    if [ -n "$best_match" ]; then
+        POTDIR="${best_match%/}/"
+        printf "\e[38;5;3m* Info:\e[0m Auto-resolved VASP_PP_PATH to %s\n" "$POTDIR"
+    fi
 fi
 
 # Some general variables 
@@ -50,8 +60,9 @@ function usage
     echo "  2           :  Eu, Yb"
     echo "  3           :  Pr, Nd, Pm, Sm, Gd, Tb, Dy, Ho, Er, Tm, Lu"
     echo " "
-    echo "* NOTE        :  Requires the VASP_PP_PATH environment variable to point to the pseudopotential directory."
-    echo "                 You must run this from the folder that contains the POSCAR."
+    echo "* NOTE        :  Requires the VASP_PP_PATH environment variable to point to the pseudopotential directory"
+    echo "                 (e.g. /path/to/potpaw_PBE.64). ASE-style parent paths (e.g. /path/to/potentials/) are also"
+    echo "                 accepted and auto-resolved. You must run this from the folder that contains the POSCAR."
     echo " "
     echo "---------------  Enjoy. Have a good day.  ---------------"
     echo " "
@@ -116,6 +127,17 @@ declare -A element_group=(
     [Eu]="_2" [Yb]="_2"
     [Pr]="_3" [Nd]="_3" [Pm]="_3" [Sm]="_3" [Gd]="_3" [Tb]="_3" [Dy]="_3" [Ho]="_3" [Er]="_3" [Tm]="_3" [Lu]="_3"
 )
+
+# Sanity checks for -r mode: recommended defaults are PBE-specific
+if [ "$decision" == "1" ]; then
+    potdir_lower="${POTDIR,,}"
+    if [[ "$potdir_lower" != *"pbe"* ]]; then
+        printf "\n\e[38;5;9;4m* Warning:\e[0m The recommended defaults (-r) are for the PBE functional, but VASP_PP_PATH does not appear to contain PBE potentials.\n\n"
+    fi
+    if [[ "$POTDIR" != *".64"* ]]; then
+        printf "\n\e[38;5;9;4m* Warning:\e[0m The recommended defaults (-r) are based on the .64 POTCAR dataset. Your path does not indicate this version.\n\n"
+    fi
+fi
 
 # Execution of creating the POTCAR
 if [ -f POSCAR ]; then # Check if POSCAR exists
