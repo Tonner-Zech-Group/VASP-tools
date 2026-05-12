@@ -1290,3 +1290,127 @@ def test_plotHOMA_main_cli(tmp_path):
          patch("sys.argv", ["plotHOMA_withPBC", str(coords), "--file", outfile,
                             "--rings", "0", "1", "2", "3", "4", "5"]):
         main()
+
+
+# ===========================================================================
+# set_vacuum
+# ===========================================================================
+
+def _make_simple_slab(z_positions=(2.0, 3.0, 4.0), cell_c=10.0):
+    """Build an axis-aligned 3-atom slab with z positions in ``z_positions``."""
+    from ase import Atoms
+    positions = [[0.0, 0.0, z] for z in z_positions]
+    return Atoms(
+        symbols=["H"] * len(z_positions),
+        positions=positions,
+        cell=[5.0, 5.0, cell_c],
+        pbc=True,
+    )
+
+
+def test_set_vacuum_helper_geometry():
+    """set_vacuum() must place the lowest atom at bottom_space and resize the
+    cell so total vacuum equals vac."""
+    from tools4vasp.set_vacuum import set_vacuum
+    atoms = _make_simple_slab(z_positions=(2.0, 3.0, 4.0), cell_c=10.0)
+    set_vacuum(atoms, vac=15.0, bottom_space=1.0, direction=2)
+    zs = atoms.positions[:, 2]
+    assert np.isclose(np.min(zs), 1.0)
+    assert np.isclose(np.max(zs), 3.0)
+    # slab_thickness (2.0) + vac (15.0) = 17.0
+    assert np.isclose(atoms.cell[2, 2], 17.0)
+
+
+def test_set_vacuum_helper_other_direction():
+    """direction=0 must operate on the x-axis instead of z."""
+    from ase import Atoms
+    from tools4vasp.set_vacuum import set_vacuum
+    atoms = Atoms(
+        symbols=["H", "H"],
+        positions=[[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+        cell=[10.0, 5.0, 5.0],
+        pbc=True,
+    )
+    set_vacuum(atoms, vac=12.0, bottom_space=1.0, direction=0)
+    xs = atoms.positions[:, 0]
+    assert np.isclose(np.min(xs), 1.0)
+    assert np.isclose(np.max(xs), 3.0)
+    assert np.isclose(atoms.cell[0, 0], 14.0)  # 2.0 + 12.0
+
+
+def test_set_vacuum_rejects_non_axis_aligned_cell():
+    """A tilted lattice vector along DIRECTION must raise ValueError rather
+    than silently destroy the tilt."""
+    from ase import Atoms
+    from tools4vasp.set_vacuum import set_vacuum
+    tilted_cell = np.array([[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.5, 0.0, 10.0]])
+    atoms = Atoms(
+        symbols=["H", "H"],
+        positions=[[0.0, 0.0, 2.0], [0.0, 0.0, 4.0]],
+        cell=tilted_cell,
+        pbc=True,
+    )
+    with pytest.raises(ValueError, match="non-orthorhombic"):
+        set_vacuum(atoms, vac=15.0, bottom_space=1.0, direction=2)
+
+
+def test_set_vacuum_run_no_overwrite_writes_suffixed_file(tmp_path):
+    """run() with overwrite=False must leave the original alone and write
+    <poscar>_vac<vac>."""
+    from tools4vasp.set_vacuum import run
+    poscar = tmp_path / "POSCAR"
+    _make_simple_slab().write(str(poscar), format="vasp")
+    original = poscar.read_text()
+    out = run(str(poscar), vac=15.0, bottom_space=1.0, direction=2, overwrite=False)
+    assert out == str(poscar) + "_vac15.0"
+    assert os.path.exists(out)
+    assert poscar.read_text() == original  # untouched
+
+
+def test_set_vacuum_run_overwrite_writes_backup(tmp_path):
+    """run() with overwrite=True must replace the input and write a _old backup
+    of the original."""
+    from ase.io import read as ase_read
+    from tools4vasp.set_vacuum import run
+    poscar = tmp_path / "POSCAR"
+    _make_simple_slab().write(str(poscar), format="vasp")
+    out = run(str(poscar), vac=15.0, bottom_space=1.0, direction=2, overwrite=True)
+    assert out == str(poscar)
+    assert (tmp_path / "POSCAR_old").is_file()
+    # Backup keeps the original c-axis (10.0); current POSCAR has new length (17.0).
+    assert np.isclose(ase_read(str(tmp_path / "POSCAR_old"), format="vasp").cell[2, 2], 10.0)
+    assert np.isclose(ase_read(str(poscar), format="vasp").cell[2, 2], 17.0)
+
+
+def test_set_vacuum_run_refuses_to_overwrite_existing_backup(tmp_path):
+    """A pre-existing _old backup must not be silently overwritten."""
+    from tools4vasp.set_vacuum import run
+    poscar = tmp_path / "POSCAR"
+    _make_simple_slab().write(str(poscar), format="vasp")
+    (tmp_path / "POSCAR_old").write_text("precious")
+    with pytest.raises(FileExistsError):
+        run(str(poscar), vac=15.0, bottom_space=1.0, direction=2, overwrite=True)
+    assert (tmp_path / "POSCAR_old").read_text() == "precious"
+
+
+def test_set_vacuum_main_cli(tmp_path, monkeypatch):
+    """main() must parse sys.argv and process the POSCAR in the current dir."""
+    from ase.io import read as ase_read
+    from tools4vasp.set_vacuum import main
+    poscar = tmp_path / "POSCAR"
+    _make_simple_slab().write(str(poscar), format="vasp")
+    monkeypatch.chdir(tmp_path)
+    with patch("sys.argv", ["set_vacuum", "15.0", "-o"]):
+        main()
+    assert (tmp_path / "POSCAR_old").is_file()
+    assert np.isclose(ase_read(str(poscar), format="vasp").cell[2, 2], 17.0)
+
+
+def test_set_vacuum_main_cli_no_matching_files(tmp_path, monkeypatch, capsys):
+    """main() must print a helpful message when no POSCAR is found."""
+    from tools4vasp.set_vacuum import main
+    monkeypatch.chdir(tmp_path)
+    with patch("sys.argv", ["set_vacuum", "15.0"]):
+        main()
+    captured = capsys.readouterr()
+    assert "No files named 'POSCAR'" in captured.out

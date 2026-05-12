@@ -12,7 +12,7 @@ dependencies = [
   'pymatgen >= 2023.5.10',
   'scipy >= 1.10.0',
 ]
-version = "1.2.0"
+version = "1.3.0"
 authors = [
   { name="Patrick Melix", email="patrick.melix@uni-leipzig.de" },
 ]
@@ -52,6 +52,7 @@ plotHOMA_withPBC = "tools4vasp.plotHOMA_withPBC:main"
 plotNEB = "tools4vasp.plotNEB:main"
 poscar2nbands = "tools4vasp.poscar2nbands:main"
 replace_potcar_symlinks = "tools4vasp.replace_potcar_symlinks:main"
+set_vacuum = "tools4vasp.set_vacuum:main"
 split_surf_and_mol = "tools4vasp.split_surf_and_mol:main"
 split_vasp_freq = "tools4vasp.split_vasp_freq:main"
 vasp2traj = "tools4vasp.vasp2traj:main"
