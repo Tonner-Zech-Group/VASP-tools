@@ -99,11 +99,17 @@ Key points:
   It does **not** trigger on feature-branch pushes to avoid duplicate runs.
 - Release workflow (`release.yml`) triggers on `v*` tags and publishes to PyPI.
 - Auto-tag workflow (`tag-on-merge.yml`) triggers on **push → main**: reads
-  `version` from `pyproject.toml`, creates tag `v<version>` if it doesn't exist,
-  which in turn triggers `release.yml`. **Merging a PR automatically produces a
-  release** — bump the version in `pyproject.toml` (and `CITATION.cff`) before
-  merging whenever a release is intended. If the tag already exists, no release
-  is created (safe for hotfixes merged without a version bump).
+  `version` from `pyproject.toml`, creates tag `v<version>` if it doesn't
+  exist, then explicitly dispatches `release.yml` against that tag via
+  `gh workflow run`. **Merging a PR automatically produces a release** — bump
+  the version in `pyproject.toml` (and `CITATION.cff`) before merging whenever
+  a release is intended. If the tag already exists, the dispatch step is
+  skipped (safe for hotfixes merged without a version bump).
+  - **Why the explicit dispatch:** GitHub suppresses on-push-tag triggers when
+    the push is authenticated with `GITHUB_TOKEN` (recursion guard), so
+    `release.yml`'s `on: push: tags: ["v*"]` does *not* fire from tags
+    created by this workflow. `workflow_dispatch` is the documented exception
+    to that rule. See the comment in `tag-on-merge.yml`.
 - TestPyPI publish (`pypi-publish.yml`) is manual (`workflow_dispatch` only).
 
 ### Releasing a new version

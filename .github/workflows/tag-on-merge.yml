@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # needed to dispatch release.yml after tagging
 
 jobs:
   tag:
@@ -44,3 +45,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.version }}"
+
+      # GitHub suppresses on-push-tag triggers when the push is authenticated
+      # with GITHUB_TOKEN (recursion guard). workflow_dispatch is exempt, so
+      # we explicitly invoke release.yml against the new tag.
+      - name: Dispatch release workflow
+        if: steps.tag_exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --ref "${{ steps.version.outputs.version }}"
