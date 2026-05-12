@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### New Tools
+
+- **`set_vacuum`** — Set the total vacuum size in a POSCAR file (space below the lowest atom + space above the highest atom along a chosen lattice direction). Supports batch processing via `--recursive`, optional in-place overwrite with automatic `_old` backup, and configurable `--direction` / `--bottom_space`. (PR #22)
+
 ## [1.2.0] - 2026-04-17
 
 ### New Tools
