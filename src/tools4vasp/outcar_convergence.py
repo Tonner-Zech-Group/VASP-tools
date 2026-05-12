@@ -52,9 +52,9 @@ _ITER_STEP_RE = re.compile(r'^\s*-{38,} Iteration\s+\d+\(\s*1\s*\)')
 def _read_outcar_text(path: str) -> str:
     """Read an OUTCAR or OUTCAR.gz and return its full text."""
     if path.endswith('.gz'):
-        with gzip.open(path, 'rt', errors='replace') as fh:
+        with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as fh:
             return fh.read()
-    with open(path, 'r', errors='replace') as fh:
+    with open(path, 'r', encoding='utf-8', errors='replace') as fh:
         return fh.read()
 
 
@@ -326,7 +326,9 @@ def run(path: str = '.') -> dict:
         alignment_str = f"UNKNOWN ({result['potcar_message']})"
     print(f"POTCAR/POSCAR alignment : {alignment_str}")
     print(f"Ionic steps : {result['n_steps']}")
-    if result['n_scf_failed'] == 0:
+    if result['n_steps'] == 0:
+        print("SCF         : no ionic steps found (truncated or non-OUTCAR file?)")
+    elif result['n_scf_failed'] == 0:
         print("SCF         : all steps converged")
     else:
         failed_steps = [i + 1 for i, ok in enumerate(result['scf_converged']) if not ok]

@@ -353,6 +353,14 @@ class TestRun:
         result = run()
         assert result['n_steps'] == 1
 
+    def test_empty_outcar_reports_no_steps(self, tmp_path, capsys):
+        # Truncated/non-OUTCAR file: n_steps==0 must not be reported as converged.
+        _write_outcar(tmp_path, "")
+        run(str(tmp_path))
+        out = capsys.readouterr().out
+        assert "no ionic steps found" in out
+        assert "all steps converged" not in out
+
 
 # ---------------------------------------------------------------------------
 # main() — CLI entry point
