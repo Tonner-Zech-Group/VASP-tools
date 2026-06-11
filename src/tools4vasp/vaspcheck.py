@@ -102,47 +102,83 @@ def check_vasp_occupations(calc) -> Optional[str]:
     return
 
 
-def _get_entropy_energies(outcar) -> tuple:
+def _iter_lines_reversed(f, chunk_size=64 * 1024):
+    """Yield the lines of a binary file from last to first.
+
+    Reads the file in chunks starting from the end, so only as much of
+    the file is touched as the consumer actually iterates over.
+
+    Input Parameters
+    ----------------
+    f : binary file object
+        Seekable file opened in binary mode
+
+    chunk_size : int
+        Number of bytes to read per backwards step
+
+    Returns
+    -------
+    Generator of lines (bytes, without trailing newline), last line first.
+    """
+    f.seek(0, os.SEEK_END)
+    pos = f.tell()
+    carry = b""
+    while pos > 0:
+        size = min(chunk_size, pos)
+        pos -= size
+        f.seek(pos)
+        lines = (f.read(size) + carry).split(b"\n")
+        # the first element may be a partial line completed by the next
+        # (earlier) chunk — hold it back as carry
+        carry = lines[0]
+        for line in reversed(lines[1:]):
+            yield line
+    if carry:
+        yield carry
+
+
+def _get_entropy_energies(outcar, chunk_size=64 * 1024) -> tuple:
     """Parse the final TOTEN and energy without entropy from an OUTCAR file.
 
-    Scans the whole file and returns the energies of the *last*
-    "free energy TOTEN" line that is followed by an "energy without
-    entropy" line within four lines, i.e. the final electronic step.
-    Earlier implementations only looked at the last 200 lines (crashing
-    for large systems where the block sits further from the end) and took
-    the first match instead of the final one (issue #24).
+    Returns the energies of the *last* "free energy TOTEN" line that is
+    followed by an "energy without entropy" line within four lines, i.e.
+    the final electronic step. The file is read backwards from the end,
+    so even multi-GB OUTCARs only have their tail touched. Earlier
+    implementations only looked at the last 200 lines (crashing for large
+    systems where the block sits further from the end) and took the first
+    match instead of the final one (issue #24).
 
     Input Parameters
     ----------------
     outcar : str
         Path to the OUTCAR file
 
+    chunk_size : int
+        Number of bytes per backwards read step
+
     Returns
     -------
     Tuple of (TOTEN, energy without entropy) in eV.
     """
-    toten = e_wo_entropy = None
-    pending_toten = None
-    lines_since_toten = 0
-    with open(outcar) as f:
-        for line in f:
-            toten_match = _TOTEN_RE.search(line)
-            if toten_match:
-                pending_toten = float(toten_match.group(1))
-                lines_since_toten = 0
-            elif pending_toten is not None:
-                lines_since_toten += 1
+    e_wo_entropy = None
+    lines_above_entropy = 0
+    with open(outcar, "rb") as f:
+        for raw_line in _iter_lines_reversed(f, chunk_size=chunk_size):
+            line = raw_line.decode(errors="replace")
+            if e_wo_entropy is None:
                 entropy_match = _E_WO_ENTROPY_RE.search(line)
                 if entropy_match:
-                    toten = pending_toten
                     e_wo_entropy = float(entropy_match.group(1))
-                    pending_toten = None
-                elif lines_since_toten >= 4:
-                    pending_toten = None
-    if toten is None:
-        raise ValueError(
-            "Could not parse TOTEN/entropy from {}".format(outcar))
-    return toten, e_wo_entropy
+                    lines_above_entropy = 0
+            else:
+                lines_above_entropy += 1
+                toten_match = _TOTEN_RE.search(line)
+                if toten_match:
+                    return float(toten_match.group(1)), e_wo_entropy
+                if lines_above_entropy >= 4:
+                    # unpaired entropy line — keep searching earlier ones
+                    e_wo_entropy = None
+    raise ValueError("Could not parse TOTEN/entropy from {}".format(outcar))
 
 
 def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:

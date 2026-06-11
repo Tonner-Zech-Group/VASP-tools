@@ -390,6 +390,63 @@ def test_get_entropy_energies_unpaired_toten_raises(tmp_path):
         _get_entropy_energies(str(outcar))
 
 
+def test_get_entropy_energies_across_chunk_boundaries(tmp_path):
+    """Backwards chunked reading must reassemble lines split mid-chunk.
+
+    A tiny chunk_size forces every line of the TOTEN block to straddle
+    chunk boundaries; the parser must still find the final block.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    filler = "\n".join("  some other OUTCAR output line {}".format(i)
+                       for i in range(50))
+    outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n"
+                      + OUTCAR_TOTEN_BLOCK_FINAL + "\n" + filler + "\n")
+
+    for chunk_size in (1, 7, 64):
+        toten, e_wo_entropy = _get_entropy_energies(
+            str(outcar), chunk_size=chunk_size)
+        assert toten == pytest.approx(-70.12345678)
+        assert e_wo_entropy == pytest.approx(-70.12245678)
+
+
+def test_get_entropy_energies_reads_only_file_tail(tmp_path):
+    """Only the tail of a huge OUTCAR may be read, not the whole file.
+
+    The final TOTEN block sits at the end of a file with a large body;
+    counting the bytes actually read must show the body was never touched.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    body = "  bulk OUTCAR line\n" * 200_000  # ~3.8 MB
+    outcar.write_text(body + OUTCAR_TOTEN_BLOCK)
+
+    bytes_read = 0
+    real_open = open
+
+    def counting_open(*open_args, **open_kwargs):
+        handle = real_open(*open_args, **open_kwargs)
+        real_read = handle.read
+
+        def counting_read(*read_args, **read_kwargs):
+            nonlocal bytes_read
+            data = real_read(*read_args, **read_kwargs)
+            bytes_read += len(data)
+            return data
+
+        handle.read = counting_read
+        return handle
+
+    with patch("builtins.open", counting_open):
+        toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+
+    assert toten == pytest.approx(-68.41063650)
+    assert e_wo_entropy == pytest.approx(-68.40903650)
+    assert bytes_read <= 128 * 1024  # a couple of chunks, not ~3.8 MB
+
+
 def test_get_entropy_energies_missing_block_raises(tmp_path):
     """A clear ValueError must be raised when no TOTEN block is found."""
     from tools4vasp.vaspcheck import _get_entropy_energies
