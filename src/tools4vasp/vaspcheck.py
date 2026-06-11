@@ -10,7 +10,6 @@ from ase import io
 import os
 import numpy as np
 from typing import Optional
-import subprocess
 
 def _get_elements_from_outcar(f: TextIOWrapper) -> list:
     """Get elements from OUTCAR file.
@@ -96,6 +95,33 @@ def check_vasp_occupations(calc) -> Optional[str]:
     return
 
 
+def _get_entropy_energies(outcar) -> tuple:
+    """Parse TOTEN and the energy without entropy from an OUTCAR file.
+
+    Looks at the last 200 lines, takes the first "TOTEN" line and the
+    "energy without entropy" line that follows within four lines.
+
+    Input Parameters
+    ----------------
+    outcar : str
+        Path to the OUTCAR file
+
+    Returns
+    -------
+    Tuple of (TOTEN, energy without entropy) in eV.
+    """
+    with open(outcar) as f:
+        lines = f.readlines()[-200:]
+    for i, line in enumerate(lines):
+        if "TOTEN" in line:
+            toten = float(line.split()[-2])
+            for next_line in lines[i + 1:i + 5]:
+                if "energy" in next_line and "entropy" in next_line:
+                    return toten, float(next_line.split()[3])
+            break
+    raise ValueError("Could not parse TOTEN/entropy from {}".format(outcar))
+
+
 def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
     """Check if the electronic entropy is larger than limit.
     
@@ -119,11 +145,7 @@ def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
     if ret:
         print("Integer occupation check returned: {:}".format(ret))
         outcar = os.path.join(path, "OUTCAR")
-        cmd = 'tail -n 200 {} | grep -A 4 "TOTEN"'.format(outcar)
-        res = subprocess.check_output([cmd], shell=True).decode('utf-8')
-        res = res.split('\n\n')
-        toten = float(res[0].split()[-2])
-        e_wo_entropy = float(res[1].split()[3])
+        toten, e_wo_entropy = _get_entropy_energies(outcar)
         entropy = toten - e_wo_entropy
         mol = io.read(os.path.join(path, 'CONTCAR'))
         entropy_per_atom = entropy / len(mol)

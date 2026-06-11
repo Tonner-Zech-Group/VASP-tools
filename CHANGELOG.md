@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **`vaspcheck`** — The electronic-entropy check no longer shells out to `tail | grep` with an unquoted path. Paths containing spaces or shell metacharacters now work, and the command-injection vector is removed; the OUTCAR is parsed in pure Python.
+- **`plotNEB`** — Dispersion energies (`Edisp`) are now read from the image OUTCARs in pure Python instead of via `grep | tail` with `shell=True`, removing the runtime dependency on `grep`/`tail` and the unquoted-path hazard.
+
 ## [1.3.0] - 2026-05-12
 
 ### New Tools

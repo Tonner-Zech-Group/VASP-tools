@@ -283,3 +283,97 @@ def test_get_all_xmls_parameter_name():
         # Should not raise TypeError for unexpected keyword argument
         result = get_all_xmls(d, verbose=False)
     assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# Bug 11 — vaspcheck / plotNEB: shell=True command injection via file paths
+# ---------------------------------------------------------------------------
+
+OUTCAR_TOTEN_BLOCK = """\
+--------------------------------------- Iteration      2(  12)  ----------
+
+  FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)
+  ---------------------------------------------------
+  free  energy   TOTEN  =       -68.41063650 eV
+
+  energy  without entropy=      -68.40903650  energy(sigma->0) =      -68.41010317
+"""
+
+
+def test_get_entropy_energies_parses_outcar(tmp_path):
+    """_get_entropy_energies must parse TOTEN and entropy-free energy."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK)
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-68.41063650)
+    assert e_wo_entropy == pytest.approx(-68.40903650)
+
+
+def test_get_entropy_energies_path_with_spaces_and_metachars(tmp_path):
+    """Paths with spaces/shell metacharacters must work (no shell involved).
+
+    The old implementation interpolated the path into a `tail | grep`
+    shell pipeline, which broke on spaces and allowed command injection.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    evil_dir = tmp_path / "my calc; $(touch pwned)"
+    evil_dir.mkdir()
+    outcar = evil_dir / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK)
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-68.41063650)
+    assert not (tmp_path / "pwned").exists()
+    assert not (evil_dir / "pwned").exists()
+
+
+def test_get_entropy_energies_missing_block_raises(tmp_path):
+    """A clear ValueError must be raised when no TOTEN block is found."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text("nothing useful here\n")
+
+    with pytest.raises(ValueError):
+        _get_entropy_energies(str(outcar))
+
+
+def test_plotNEB_dispersion_read_without_shell(tmp_path, monkeypatch):
+    """run(plot_dispersion=True) must read Edisp from OUTCARs without a shell."""
+    from tools4vasp import plotNEB
+
+    monkeypatch.chdir(tmp_path)
+    n_img = 3
+    # minimal spline.dat / neb.dat: columns (idx, x, E, F)
+    spline_lines = []
+    for i in range(10):
+        x = i / 9.0
+        spline_lines.append("{} {} {} {}".format(i, x, 0.0, 0.0))
+    (tmp_path / "spline.dat").write_text("\n".join(spline_lines) + "\n")
+    neb_lines = []
+    for i in range(n_img):
+        neb_lines.append("{} {} {} {}".format(i, i / 2.0, 0.1 * i, 0.0))
+    (tmp_path / "neb.dat").write_text("\n".join(neb_lines) + "\n")
+    for i in range(n_img):
+        d = tmp_path / "{:02d}".format(i)
+        d.mkdir()
+        (d / "OUTCAR").write_text(
+            "  Edisp (eV) =   -0.10000\n"
+            "  Edisp (eV) =   -{:.5f}\n".format(0.2 + 0.1 * i)
+        )
+
+    plotNEB.run(filename=str(tmp_path / "NEB.png"), plot_dispersion=True)
+    assert (tmp_path / "NEB.png").exists()
+
+
+def test_plotNEB_module_does_not_use_subprocess():
+    """plotNEB must not shell out at all (grep/tail dependency removed)."""
+    import tools4vasp.plotNEB as mod
+
+    src = inspect.getsource(mod)
+    assert "subprocess" not in src
+    assert "shell=True" not in src

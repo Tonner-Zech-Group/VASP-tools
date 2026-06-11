@@ -5,10 +5,8 @@
 # 2022/01
 #
 # You can import the module and then call .main() or use it as a script
-# Needs grep and tail.
 import argparse
 import os
-import subprocess
 import numpy as np
 from matplotlib.ticker import MaxNLocator
 from ase.units import create_units
@@ -131,8 +129,12 @@ def run(filename='NEB.png', presentation=False,
             assert os.path.isdir(path), "Could not find dir {}".format(path)
             outcar = os.path.join(path,'OUTCAR')
             assert os.path.isfile(outcar), "Could not find file {}".format(outcar)
-            child = subprocess.Popen(["grep 'Edisp (eV)' {:} | tail -1".format(outcar)], stdout=subprocess.PIPE, shell=True)
-            dispE = float(child.communicate()[0].strip().split()[-1])
+            dispE = None
+            with open(outcar) as f:
+                for line in f:
+                    if 'Edisp (eV)' in line:
+                        dispE = float(line.split()[-1])
+            assert dispE is not None, "No 'Edisp (eV)' entry found in {}".format(outcar)
             dispersion.append(dispE)
         dispersion = np.array(dispersion)
         dispersion -= dispersion[0]
