@@ -283,3 +283,264 @@ def test_get_all_xmls_parameter_name():
         # Should not raise TypeError for unexpected keyword argument
         result = get_all_xmls(d, verbose=False)
     assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# Bug 11 — vaspcheck / plotNEB: shell=True command injection via file paths
+# ---------------------------------------------------------------------------
+
+OUTCAR_TOTEN_BLOCK = """\
+--------------------------------------- Iteration      2(  12)  ----------
+
+  FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)
+  ---------------------------------------------------
+  free  energy   TOTEN  =       -68.41063650 eV
+
+  energy  without entropy=      -68.40903650  energy(sigma->0) =      -68.41010317
+"""
+
+
+def test_get_entropy_energies_parses_outcar(tmp_path):
+    """_get_entropy_energies must parse TOTEN and entropy-free energy."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK)
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-68.41063650)
+    assert e_wo_entropy == pytest.approx(-68.40903650)
+
+
+def test_get_entropy_energies_path_with_spaces_and_metachars(tmp_path):
+    """Paths with spaces/shell metacharacters must work (no shell involved).
+
+    The old implementation interpolated the path into a `tail | grep`
+    shell pipeline, which broke on spaces and allowed command injection.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    evil_dir = tmp_path / "my calc; $(touch pwned)"
+    evil_dir.mkdir()
+    outcar = evil_dir / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK)
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-68.41063650)
+    assert not (tmp_path / "pwned").exists()
+    assert not (evil_dir / "pwned").exists()
+
+
+# ---------------------------------------------------------------------------
+# Issue #24 — vaspcheck: entropy check must use the FINAL TOTEN block and
+# must not depend on the block being within the last 200 lines
+# ---------------------------------------------------------------------------
+
+OUTCAR_TOTEN_BLOCK_FINAL = """\
+--------------------------------------- Iteration      2(  13)  ----------
+
+  FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)
+  ---------------------------------------------------
+  free  energy   TOTEN  =       -70.12345678 eV
+
+  energy  without entropy=      -70.12245678  energy(sigma->0) =      -70.12295678
+"""
+
+
+def test_get_entropy_energies_takes_last_toten_block(tmp_path):
+    """With multiple TOTEN entries the final one must be used (issue #24)."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n" + OUTCAR_TOTEN_BLOCK_FINAL)
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-70.12345678)
+    assert e_wo_entropy == pytest.approx(-70.12245678)
+
+
+def test_get_entropy_energies_block_beyond_last_200_lines(tmp_path):
+    """TOTEN deeper than 200 lines from the end must still parse (issue #24).
+
+    Large systems print long property tables after the final energies, so
+    the old `tail -n 200`-style window crashed on them.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    trailing = "\n".join("  some other OUTCAR output line {}".format(i)
+                         for i in range(300))
+    outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n" + trailing + "\n")
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-68.41063650)
+    assert e_wo_entropy == pytest.approx(-68.40903650)
+
+
+def test_get_entropy_energies_unpaired_toten_raises(tmp_path):
+    """A TOTEN line with no entropy line within four lines must not match."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(
+        "  free  energy   TOTEN  =       -68.41063650 eV\n"
+        + "filler\n" * 10)
+
+    with pytest.raises(ValueError):
+        _get_entropy_energies(str(outcar))
+
+
+def test_get_entropy_energies_across_chunk_boundaries(tmp_path):
+    """Backwards chunked reading must reassemble lines split mid-chunk.
+
+    A tiny chunk_size forces every line of the TOTEN block to straddle
+    chunk boundaries; the parser must still find the final block.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    filler = "\n".join("  some other OUTCAR output line {}".format(i)
+                       for i in range(50))
+    outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n"
+                      + OUTCAR_TOTEN_BLOCK_FINAL + "\n" + filler + "\n")
+
+    for chunk_size in (1, 7, 64):
+        toten, e_wo_entropy = _get_entropy_energies(
+            str(outcar), chunk_size=chunk_size)
+        assert toten == pytest.approx(-70.12345678)
+        assert e_wo_entropy == pytest.approx(-70.12245678)
+
+
+def test_get_entropy_energies_reads_only_file_tail(tmp_path):
+    """Only the tail of a huge OUTCAR may be read, not the whole file.
+
+    The final TOTEN block sits at the end of a file with a large body;
+    counting the bytes actually read must show the body was never touched.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    body = "  bulk OUTCAR line\n" * 200_000  # ~3.8 MB
+    outcar.write_text(body + OUTCAR_TOTEN_BLOCK)
+
+    bytes_read = [0]
+    real_open = open
+
+    class CountingFileProxy:
+        """Delegating wrapper counting bytes returned by read().
+
+        A proxy is used instead of assigning to handle.read because
+        method attributes of C-implemented file objects may be read-only.
+        """
+
+        def __init__(self, handle):
+            self._handle = handle
+
+        def read(self, *read_args, **read_kwargs):
+            data = self._handle.read(*read_args, **read_kwargs)
+            bytes_read[0] += len(data)
+            return data
+
+        def __getattr__(self, name):
+            return getattr(self._handle, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return self._handle.__exit__(*exc_info)
+
+    def counting_open(*open_args, **open_kwargs):
+        return CountingFileProxy(real_open(*open_args, **open_kwargs))
+
+    with patch("builtins.open", counting_open):
+        toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+
+    assert toten == pytest.approx(-68.41063650)
+    assert e_wo_entropy == pytest.approx(-68.40903650)
+    assert bytes_read[0] <= 128 * 1024  # a couple of chunks, not ~3.8 MB
+
+
+def test_iter_lines_reversed_rejects_nonpositive_chunk_size(tmp_path):
+    """chunk_size <= 0 must raise instead of looping forever."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+    from tools4vasp._fileutils import iter_lines_reversed
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK)
+
+    for bad_chunk_size in (0, -1):
+        with pytest.raises(ValueError, match="chunk_size"):
+            _get_entropy_energies(str(outcar), chunk_size=bad_chunk_size)
+        with open(outcar, "rb") as f:
+            with pytest.raises(ValueError, match="chunk_size"):
+                list(iter_lines_reversed(f, chunk_size=bad_chunk_size))
+
+
+def test_get_entropy_energies_missing_block_raises(tmp_path):
+    """A clear ValueError must be raised when no TOTEN block is found."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text("nothing useful here\n")
+
+    with pytest.raises(ValueError):
+        _get_entropy_energies(str(outcar))
+
+
+def test_plotNEB_dispersion_read_without_shell(tmp_path, monkeypatch):
+    """run(plot_dispersion=True) must read Edisp from OUTCARs without a shell."""
+    from tools4vasp import plotNEB
+
+    monkeypatch.chdir(tmp_path)
+    n_img = 3
+    # minimal spline.dat / neb.dat: columns (idx, x, E, F)
+    spline_lines = []
+    for i in range(10):
+        x = i / 9.0
+        spline_lines.append("{} {} {} {}".format(i, x, 0.0, 0.0))
+    (tmp_path / "spline.dat").write_text("\n".join(spline_lines) + "\n")
+    neb_lines = []
+    for i in range(n_img):
+        neb_lines.append("{} {} {} {}".format(i, i / 2.0, 0.1 * i, 0.0))
+    (tmp_path / "neb.dat").write_text("\n".join(neb_lines) + "\n")
+    for i in range(n_img):
+        d = tmp_path / "{:02d}".format(i)
+        d.mkdir()
+        (d / "OUTCAR").write_text(
+            "  Edisp (eV) =   -0.10000\n"
+            "  Edisp (eV) =   -{:.5f}\n".format(0.2 + 0.1 * i)
+        )
+
+    plotNEB.run(filename=str(tmp_path / "NEB.png"), plot_dispersion=True)
+    assert (tmp_path / "NEB.png").exists()
+
+
+def test_plotNEB_module_does_not_use_subprocess():
+    """plotNEB must not shell out at all (grep/tail dependency removed).
+
+    Inspects the AST rather than the raw source so that mere mentions of
+    "subprocess" in comments/docstrings (or other harmless refactors)
+    don't trip the test — only real imports or shell=... call keywords do.
+    """
+    import ast
+    import tools4vasp.plotNEB as mod
+
+    tree = ast.parse(inspect.getsource(mod))
+    imports = [
+        name.name
+        for node in ast.walk(tree) if isinstance(node, ast.Import)
+        for name in node.names
+    ] + [
+        node.module
+        for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    ]
+    assert not any(name == "subprocess" or name.startswith("subprocess.")
+                   for name in imports if name)
+
+    shell_keywords = [
+        kw
+        for node in ast.walk(tree) if isinstance(node, ast.Call)
+        for kw in node.keywords if kw.arg == "shell"
+    ]
+    assert not shell_keywords

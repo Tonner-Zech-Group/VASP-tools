@@ -8,9 +8,16 @@ from io import TextIOWrapper
 from ase.calculators.vasp.vasp import Vasp
 from ase import io
 import os
+import re
 import numpy as np
 from typing import Optional
-import subprocess
+from tools4vasp._fileutils import iter_lines_reversed
+
+# OUTCAR final-energy block, e.g.:
+#   free  energy   TOTEN  =       -68.41063650 eV
+#   energy  without entropy=      -68.40903650  energy(sigma->0) = ...
+_TOTEN_RE = re.compile(r"free\s+energy\s+TOTEN\s*=\s*(-?\d+\.\d+)")
+_E_WO_ENTROPY_RE = re.compile(r"energy\s+without\s+entropy\s*=\s*(-?\d+\.\d+)")
 
 def _get_elements_from_outcar(f: TextIOWrapper) -> list:
     """Get elements from OUTCAR file.
@@ -96,6 +103,50 @@ def check_vasp_occupations(calc) -> Optional[str]:
     return
 
 
+def _get_entropy_energies(outcar, chunk_size=64 * 1024) -> tuple:
+    """Parse the final TOTEN and energy without entropy from an OUTCAR file.
+
+    Returns the energies of the *last* "free energy TOTEN" line that is
+    followed by an "energy without entropy" line within four lines, i.e.
+    the final electronic step. The file is read backwards from the end,
+    so even multi-GB OUTCARs only have their tail touched. Earlier
+    implementations only looked at the last 200 lines (crashing for large
+    systems where the block sits further from the end) and took the first
+    match instead of the final one (issue #24).
+
+    Input Parameters
+    ----------------
+    outcar : str
+        Path to the OUTCAR file
+
+    chunk_size : int
+        Number of bytes per backwards read step, must be positive
+
+    Returns
+    -------
+    Tuple of (TOTEN, energy without entropy) in eV.
+    """
+    e_wo_entropy = None
+    lines_above_entropy = 0
+    with open(outcar, "rb") as f:
+        for raw_line in iter_lines_reversed(f, chunk_size=chunk_size):
+            line = raw_line.decode(errors="replace")
+            if e_wo_entropy is None:
+                entropy_match = _E_WO_ENTROPY_RE.search(line)
+                if entropy_match:
+                    e_wo_entropy = float(entropy_match.group(1))
+                    lines_above_entropy = 0
+            else:
+                lines_above_entropy += 1
+                toten_match = _TOTEN_RE.search(line)
+                if toten_match:
+                    return float(toten_match.group(1)), e_wo_entropy
+                if lines_above_entropy >= 4:
+                    # unpaired entropy line — keep searching earlier ones
+                    e_wo_entropy = None
+    raise ValueError("Could not parse TOTEN/entropy from {}".format(outcar))
+
+
 def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
     """Check if the electronic entropy is larger than limit.
     
@@ -119,11 +170,7 @@ def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
     if ret:
         print("Integer occupation check returned: {:}".format(ret))
         outcar = os.path.join(path, "OUTCAR")
-        cmd = 'tail -n 200 {} | grep -A 4 "TOTEN"'.format(outcar)
-        res = subprocess.check_output([cmd], shell=True).decode('utf-8')
-        res = res.split('\n\n')
-        toten = float(res[0].split()[-2])
-        e_wo_entropy = float(res[1].split()[3])
+        toten, e_wo_entropy = _get_entropy_energies(outcar)
         entropy = toten - e_wo_entropy
         mol = io.read(os.path.join(path, 'CONTCAR'))
         entropy_per_atom = entropy / len(mol)

@@ -154,6 +154,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 | `split_vasp_freq` | Split a VASP frequency calculation into partial jobs and recombine. | `split_vasp_freq split 20` |
 | `vasp2traj` | Convert VASP OUTCAR or XDATCAR to an ext-xyz trajectory. | `vasp2traj traj.xyz OUTCAR` |
 | `vaspcheck` | Assert proper occupations and SCF+GO convergence using ASE. | `vaspcheck ./run` |
+| `vaspcheck-outcar` | Check SCF and ionic convergence directly from OUTCAR / OUTCAR.gz (no vasprun.xml needed). | `vaspcheck-outcar ./run` |
 | `vaspGetEF` | Plot energy and max force across multiple GO restart jobs. When a POSCAR with selective dynamics is found, forces are computed over free (unfrozen) components only — per-component constraints (e.g. `T T F`) are handled correctly. | `vaspGetEF ./run` |
 | `viewMode` | Animated preview of a MODECAR in the ASE GUI. | `viewMode --scale 2` |
 | `visualize-magnetization` | Create a VMD visualisation state for the magnetisation density. | `visualize-magnetization` |

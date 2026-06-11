@@ -5,14 +5,13 @@
 # 2022/01
 #
 # You can import the module and then call .main() or use it as a script
-# Needs grep and tail.
 import argparse
 import os
-import subprocess
 import numpy as np
 from matplotlib.ticker import MaxNLocator
 from ase.units import create_units
 from matplotlib import pyplot as plt
+from tools4vasp._fileutils import iter_lines_reversed
 
 
 def plot(reactionCoord, reactionCoordImageAxis, energies, energySpline, forces, filename, lw=3, s=0, highlight=None, dispersion=None, unit="kJ/mol"):
@@ -131,8 +130,17 @@ def run(filename='NEB.png', presentation=False,
             assert os.path.isdir(path), "Could not find dir {}".format(path)
             outcar = os.path.join(path,'OUTCAR')
             assert os.path.isfile(outcar), "Could not find file {}".format(outcar)
-            child = subprocess.Popen(["grep 'Edisp (eV)' {:} | tail -1".format(outcar)], stdout=subprocess.PIPE, shell=True)
-            dispE = float(child.communicate()[0].strip().split()[-1])
+            dispE = None
+            # the last Edisp entry is wanted — read the file backwards so
+            # huge OUTCARs only have their tail touched
+            with open(outcar, 'rb') as f:
+                for raw_line in iter_lines_reversed(f):
+                    if b'Edisp (eV)' in raw_line:
+                        dispE = float(raw_line.split()[-1])
+                        break
+            if dispE is None:
+                raise ValueError(
+                    "No 'Edisp (eV)' entry found in {}".format(outcar))
             dispersion.append(dispE)
         dispersion = np.array(dispersion)
         dispersion -= dispersion[0]
