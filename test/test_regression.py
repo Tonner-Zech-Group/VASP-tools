@@ -430,9 +430,30 @@ def test_plotNEB_dispersion_read_without_shell(tmp_path, monkeypatch):
 
 
 def test_plotNEB_module_does_not_use_subprocess():
-    """plotNEB must not shell out at all (grep/tail dependency removed)."""
+    """plotNEB must not shell out at all (grep/tail dependency removed).
+
+    Inspects the AST rather than the raw source so that mere mentions of
+    "subprocess" in comments/docstrings (or other harmless refactors)
+    don't trip the test — only real imports or shell=... call keywords do.
+    """
+    import ast
     import tools4vasp.plotNEB as mod
 
-    src = inspect.getsource(mod)
-    assert "subprocess" not in src
-    assert "shell=True" not in src
+    tree = ast.parse(inspect.getsource(mod))
+    imports = [
+        name.name
+        for node in ast.walk(tree) if isinstance(node, ast.Import)
+        for name in node.names
+    ] + [
+        node.module
+        for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    ]
+    assert not any(name == "subprocess" or name.startswith("subprocess.")
+                   for name in imports if name)
+
+    shell_keywords = [
+        kw
+        for node in ast.walk(tree) if isinstance(node, ast.Call)
+        for kw in node.keywords if kw.arg == "shell"
+    ]
+    assert not shell_keywords

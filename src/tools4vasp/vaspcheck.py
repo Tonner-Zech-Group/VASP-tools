@@ -8,8 +8,15 @@ from io import TextIOWrapper
 from ase.calculators.vasp.vasp import Vasp
 from ase import io
 import os
+import re
 import numpy as np
 from typing import Optional
+
+# OUTCAR final-energy block, e.g.:
+#   free  energy   TOTEN  =       -68.41063650 eV
+#   energy  without entropy=      -68.40903650  energy(sigma->0) = ...
+_TOTEN_RE = re.compile(r"free\s+energy\s+TOTEN\s*=\s*(-?\d+\.\d+)")
+_E_WO_ENTROPY_RE = re.compile(r"energy\s+without\s+entropy\s*=\s*(-?\d+\.\d+)")
 
 def _get_elements_from_outcar(f: TextIOWrapper) -> list:
     """Get elements from OUTCAR file.
@@ -98,12 +105,12 @@ def check_vasp_occupations(calc) -> Optional[str]:
 def _get_entropy_energies(outcar) -> tuple:
     """Parse the final TOTEN and energy without entropy from an OUTCAR file.
 
-    Scans the whole file and returns the energies of the *last* "TOTEN"
-    line that is followed by an "energy without entropy" line within four
-    lines, i.e. the final electronic step. Earlier implementations only
-    looked at the last 200 lines (crashing for large systems where the
-    block sits further from the end) and took the first match instead of
-    the final one (issue #24).
+    Scans the whole file and returns the energies of the *last*
+    "free energy TOTEN" line that is followed by an "energy without
+    entropy" line within four lines, i.e. the final electronic step.
+    Earlier implementations only looked at the last 200 lines (crashing
+    for large systems where the block sits further from the end) and took
+    the first match instead of the final one (issue #24).
 
     Input Parameters
     ----------------
@@ -119,14 +126,16 @@ def _get_entropy_energies(outcar) -> tuple:
     lines_since_toten = 0
     with open(outcar) as f:
         for line in f:
-            if "TOTEN" in line:
-                pending_toten = float(line.split()[-2])
+            toten_match = _TOTEN_RE.search(line)
+            if toten_match:
+                pending_toten = float(toten_match.group(1))
                 lines_since_toten = 0
             elif pending_toten is not None:
                 lines_since_toten += 1
-                if "energy" in line and "entropy" in line:
+                entropy_match = _E_WO_ENTROPY_RE.search(line)
+                if entropy_match:
                     toten = pending_toten
-                    e_wo_entropy = float(line.split()[3])
+                    e_wo_entropy = float(entropy_match.group(1))
                     pending_toten = None
                 elif lines_since_toten >= 4:
                     pending_toten = None
