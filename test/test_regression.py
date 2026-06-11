@@ -423,28 +423,58 @@ def test_get_entropy_energies_reads_only_file_tail(tmp_path):
     body = "  bulk OUTCAR line\n" * 200_000  # ~3.8 MB
     outcar.write_text(body + OUTCAR_TOTEN_BLOCK)
 
-    bytes_read = 0
+    bytes_read = [0]
     real_open = open
 
-    def counting_open(*open_args, **open_kwargs):
-        handle = real_open(*open_args, **open_kwargs)
-        real_read = handle.read
+    class CountingFileProxy:
+        """Delegating wrapper counting bytes returned by read().
 
-        def counting_read(*read_args, **read_kwargs):
-            nonlocal bytes_read
-            data = real_read(*read_args, **read_kwargs)
-            bytes_read += len(data)
+        A proxy is used instead of assigning to handle.read because
+        method attributes of C-implemented file objects may be read-only.
+        """
+
+        def __init__(self, handle):
+            self._handle = handle
+
+        def read(self, *read_args, **read_kwargs):
+            data = self._handle.read(*read_args, **read_kwargs)
+            bytes_read[0] += len(data)
             return data
 
-        handle.read = counting_read
-        return handle
+        def __getattr__(self, name):
+            return getattr(self._handle, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return self._handle.__exit__(*exc_info)
+
+    def counting_open(*open_args, **open_kwargs):
+        return CountingFileProxy(real_open(*open_args, **open_kwargs))
 
     with patch("builtins.open", counting_open):
         toten, e_wo_entropy = _get_entropy_energies(str(outcar))
 
     assert toten == pytest.approx(-68.41063650)
     assert e_wo_entropy == pytest.approx(-68.40903650)
-    assert bytes_read <= 128 * 1024  # a couple of chunks, not ~3.8 MB
+    assert bytes_read[0] <= 128 * 1024  # a couple of chunks, not ~3.8 MB
+
+
+def test_iter_lines_reversed_rejects_nonpositive_chunk_size(tmp_path):
+    """chunk_size <= 0 must raise instead of looping forever."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+    from tools4vasp._fileutils import iter_lines_reversed
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK)
+
+    for bad_chunk_size in (0, -1):
+        with pytest.raises(ValueError, match="chunk_size"):
+            _get_entropy_energies(str(outcar), chunk_size=bad_chunk_size)
+        with open(outcar, "rb") as f:
+            with pytest.raises(ValueError, match="chunk_size"):
+                list(iter_lines_reversed(f, chunk_size=bad_chunk_size))
 
 
 def test_get_entropy_energies_missing_block_raises(tmp_path):
