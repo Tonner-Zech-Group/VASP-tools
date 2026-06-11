@@ -96,10 +96,14 @@ def check_vasp_occupations(calc) -> Optional[str]:
 
 
 def _get_entropy_energies(outcar) -> tuple:
-    """Parse TOTEN and the energy without entropy from an OUTCAR file.
+    """Parse the final TOTEN and energy without entropy from an OUTCAR file.
 
-    Looks at the last 200 lines, takes the first "TOTEN" line and the
-    "energy without entropy" line that follows within four lines.
+    Scans the whole file and returns the energies of the *last* "TOTEN"
+    line that is followed by an "energy without entropy" line within four
+    lines, i.e. the final electronic step. Earlier implementations only
+    looked at the last 200 lines (crashing for large systems where the
+    block sits further from the end) and took the first match instead of
+    the final one (issue #24).
 
     Input Parameters
     ----------------
@@ -110,16 +114,26 @@ def _get_entropy_energies(outcar) -> tuple:
     -------
     Tuple of (TOTEN, energy without entropy) in eV.
     """
+    toten = e_wo_entropy = None
+    pending_toten = None
+    lines_since_toten = 0
     with open(outcar) as f:
-        lines = f.readlines()[-200:]
-    for i, line in enumerate(lines):
-        if "TOTEN" in line:
-            toten = float(line.split()[-2])
-            for next_line in lines[i + 1:i + 5]:
-                if "energy" in next_line and "entropy" in next_line:
-                    return toten, float(next_line.split()[3])
-            break
-    raise ValueError("Could not parse TOTEN/entropy from {}".format(outcar))
+        for line in f:
+            if "TOTEN" in line:
+                pending_toten = float(line.split()[-2])
+                lines_since_toten = 0
+            elif pending_toten is not None:
+                lines_since_toten += 1
+                if "energy" in line and "entropy" in line:
+                    toten = pending_toten
+                    e_wo_entropy = float(line.split()[3])
+                    pending_toten = None
+                elif lines_since_toten >= 4:
+                    pending_toten = None
+    if toten is None:
+        raise ValueError(
+            "Could not parse TOTEN/entropy from {}".format(outcar))
+    return toten, e_wo_entropy
 
 
 def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:

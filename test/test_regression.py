@@ -331,6 +331,65 @@ def test_get_entropy_energies_path_with_spaces_and_metachars(tmp_path):
     assert not (evil_dir / "pwned").exists()
 
 
+# ---------------------------------------------------------------------------
+# Issue #24 — vaspcheck: entropy check must use the FINAL TOTEN block and
+# must not depend on the block being within the last 200 lines
+# ---------------------------------------------------------------------------
+
+OUTCAR_TOTEN_BLOCK_FINAL = """\
+--------------------------------------- Iteration      2(  13)  ----------
+
+  FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)
+  ---------------------------------------------------
+  free  energy   TOTEN  =       -70.12345678 eV
+
+  energy  without entropy=      -70.12245678  energy(sigma->0) =      -70.12295678
+"""
+
+
+def test_get_entropy_energies_takes_last_toten_block(tmp_path):
+    """With multiple TOTEN entries the final one must be used (issue #24)."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n" + OUTCAR_TOTEN_BLOCK_FINAL)
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-70.12345678)
+    assert e_wo_entropy == pytest.approx(-70.12245678)
+
+
+def test_get_entropy_energies_block_beyond_last_200_lines(tmp_path):
+    """TOTEN deeper than 200 lines from the end must still parse (issue #24).
+
+    Large systems print long property tables after the final energies, so
+    the old `tail -n 200`-style window crashed on them.
+    """
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    trailing = "\n".join("  some other OUTCAR output line {}".format(i)
+                         for i in range(300))
+    outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n" + trailing + "\n")
+
+    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    assert toten == pytest.approx(-68.41063650)
+    assert e_wo_entropy == pytest.approx(-68.40903650)
+
+
+def test_get_entropy_energies_unpaired_toten_raises(tmp_path):
+    """A TOTEN line with no entropy line within four lines must not match."""
+    from tools4vasp.vaspcheck import _get_entropy_energies
+
+    outcar = tmp_path / "OUTCAR"
+    outcar.write_text(
+        "  free  energy   TOTEN  =       -68.41063650 eV\n"
+        + "filler\n" * 10)
+
+    with pytest.raises(ValueError):
+        _get_entropy_energies(str(outcar))
+
+
 def test_get_entropy_energies_missing_block_raises(tmp_path):
     """A clear ValueError must be raised when no TOTEN block is found."""
     from tools4vasp.vaspcheck import _get_entropy_energies
