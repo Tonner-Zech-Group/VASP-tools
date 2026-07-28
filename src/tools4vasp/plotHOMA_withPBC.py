@@ -6,12 +6,15 @@
 # 2026/03/26
 #
 import argparse
-from ase.io import read
-from ase.neighborlist import neighbor_list
-from ase import Atoms
+import itertools
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
-import itertools
+from ase import Atoms
+from ase.io import read
+from ase.neighborlist import neighbor_list
+
 plt.rcParams["font.family"] = "arial"
 # import timeit
 
@@ -19,7 +22,6 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
     mol = read(Coordinates)
     if filename == "Coordinates.svg":
         filename=Coordinates.split(".")[0]+".svg"
-    #
     carbons = Atoms(None)
     for atom in mol:
         for typ in atom_types:
@@ -37,12 +39,13 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
         for x in [0, 1, -1]:
             for y in [0, 1, -1]:
                 for atom in carbons:
-                    new_copy = Atoms(atom.symbol, [list(atom.position+x*cell[0]+y*cell[1])])
-                    if (list(atom.position+x*cell[0]+y*cell[1])[0] < max_X_coord+pbc_cutoff and
-                        list(atom.position+x*cell[0]+y*cell[1])[0] > min_X_coord-pbc_cutoff and
-                        list(atom.position+x*cell[0]+y*cell[1])[1] < max_Y_coord+pbc_cutoff and
-                        list(atom.position+x*cell[0]+y*cell[1])[1] > min_Y_coord-pbc_cutoff):
-                        periodic_copy += new_copy 
+                    shifted_pos = atom.position+x*cell[0]+y*cell[1]
+                    new_copy = Atoms(atom.symbol, [list(shifted_pos)])
+                    if (shifted_pos[0] < max_X_coord+pbc_cutoff and
+                        shifted_pos[0] > min_X_coord-pbc_cutoff and
+                        shifted_pos[1] < max_Y_coord+pbc_cutoff and
+                        shifted_pos[1] > min_Y_coord-pbc_cutoff):
+                        periodic_copy += new_copy
 
         carbons = periodic_copy
     
@@ -71,19 +74,19 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
     #print("Graph loaded:", np.round(timeit.default_timer() - start_time,2))
     
     # find all paths between two points in graph
-    def find_all_paths(graph, start, end, path =[]):
+    def find_all_paths(graph, start, end, path=None):
+        if path is None:
+            path = []
         path = path + [start]
         if start == end:
             return [path]
         paths = []
         for node in graph[start]:
-            if max_path_len != 0:
-                if len(path) > max_path_len: #7
-                    break
+            if max_path_len != 0 and len(path) > max_path_len: #7
+                break
             if node not in path:
                 newpaths = find_all_paths(graph, node, end, path)
-                for newpath in newpaths:
-                    paths.append(newpath)
+                paths.extend(newpaths)
         paths.sort(key=len)
         return paths
     # print(find_all_paths(nl_dict, 0, 1))
@@ -123,9 +126,9 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
             edges_of_cycles.append([])
             for pos2,v in enumerate(cycle):
                 if pos2 < len(cycle)-1:
-                    edges_of_cycles[pos1].append(sorted([cycle[pos2],cycle[pos2+1]]))
+                    edges_of_cycles[pos1].append(sorted([v,cycle[pos2+1]]))
                 else:
-                    edges_of_cycles[pos1].append(sorted([cycle[pos2],cycle[0]]))
+                    edges_of_cycles[pos1].append(sorted([v,cycle[0]]))
             edges_of_cycles[pos1].sort()
         # print(edges_of_cycles)
         # print()
@@ -134,7 +137,7 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
         # if it is not a linear combination of previosly appendet smallest cycles
         if not cycles:
             print("ERROR: No cycles found in the molecular graph. Check your input or specify rings manually with --rings.")
-            exit()
+            sys.exit()
         SSSR = [cycles[0]]
         SSSR_edges = [edges_of_cycles[0]]
         for pos,i in enumerate(edges_of_cycles):
@@ -181,7 +184,7 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
     y = carbons[int(C2)].position[1]
     if np.isclose(x, 0.0) and np.isclose(y, 0.0):
         print("ERROR: Cannot determine alignment angle because the selected alignment atom is at the origin!")
-        exit()
+        sys.exit()
 
     angle_y = np.degrees(np.arctan2(x, y))
     angle_x = np.degrees(np.arctan2(-y, x))
@@ -203,7 +206,7 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
             angle = angle_x
     else:
         print("ERROR: Wrong axis specified. Needs to be \"x\" or \"y\"!")
-        exit()
+        sys.exit()
             
     for atom in carbons:
         rot_xcoord=atom.position[0]*np.cos(angle*np.pi/180)-atom.position[1]*np.sin(angle*np.pi/180)
@@ -263,7 +266,7 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
     X_min = min([i[0] for i in carbons.get_positions()])
     X_max = max([i[0] for i in carbons.get_positions()])
 
-    text_kwargs = dict(ha='center', va='center', fontsize=16, color='black')
+    text_kwargs = {'ha': 'center', 'va': 'center', 'fontsize': 16, 'color': 'black'}
     if not pbc:
         f=0.6
         plt.figure(figsize=[f*(X_max-X_min+0.8),f*(Y_max-Y_min+0.8)], dpi=300)
@@ -301,7 +304,7 @@ def run(Coordinates, filename, C1, C2, a, d_opt, norm, rings, pbc_cutoff, max_pa
                 Y_list.append(carbons[i].position[1])
             middle_X = np.mean(X_list)
             middle_Y = np.mean(Y_list)
-            plt.text(middle_X, middle_Y, '{:.2f}'.format(np.round(HOMA_rings[pos],2)), **text_kwargs, zorder=25)
+            plt.text(middle_X, middle_Y, f'{np.round(HOMA_rings[pos],2):.2f}', **text_kwargs, zorder=25)
     plt.savefig(filename, transparent=True)
     #plt.show()
 

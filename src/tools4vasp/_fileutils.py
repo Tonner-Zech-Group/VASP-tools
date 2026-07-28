@@ -27,7 +27,7 @@ def iter_lines_reversed(f, chunk_size=64 * 1024):
     """
     if chunk_size <= 0:
         raise ValueError(
-            "chunk_size must be positive, got {}".format(chunk_size))
+            f"chunk_size must be positive, got {chunk_size}")
     f.seek(0, os.SEEK_END)
     pos = f.tell()
     carry = b""
@@ -39,7 +39,6 @@ def iter_lines_reversed(f, chunk_size=64 * 1024):
         # the first element may be a partial line completed by the next
         # (earlier) chunk — hold it back as carry
         carry = lines[0]
-        for line in reversed(lines[1:]):
-            yield line
+        yield from reversed(lines[1:])
     if carry:
         yield carry

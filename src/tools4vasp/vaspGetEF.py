@@ -13,20 +13,22 @@ reads POSCAR directly and applies the mask to forces from vasprun.xml rather
 than OUTCAR, but the per-component masking idea is the same.
 """
 
-from natsort import natsorted
-import glob
-import os
-import json
-import numpy as np
-import matplotlib.pyplot as plt
-from ase.io.vasp import read_vasp_xml
-from typing import Tuple, List, Dict, Optional
+from __future__ import annotations
 
+import glob
+import json
+import os
+from contextlib import nullcontext
+
+import matplotlib.pyplot as plt
+import numpy as np
+from ase.io.vasp import read_vasp_xml
+from natsort import natsorted
 
 print_format = "{:5d} {:20.8f} {:20.6f} {:20.6g}"
 
 
-def read_free_mask(poscar_path: str) -> Optional[np.ndarray]:
+def read_free_mask(poscar_path: str) -> np.ndarray | None:
     """Read a per-component free/frozen boolean mask from a POSCAR.
 
     Parses the selective-dynamics T/F flags and returns a mask where
@@ -89,7 +91,7 @@ def read_free_mask(poscar_path: str) -> Optional[np.ndarray]:
     return mask
 
 
-def get_max_f(atoms, free_mask: Optional[np.ndarray] = None) -> float:
+def get_max_f(atoms, free_mask: np.ndarray | None = None) -> float:
     """Get the maximum force magnitude from an ASE atoms object.
 
     Parameters
@@ -113,7 +115,7 @@ def get_max_f(atoms, free_mask: Optional[np.ndarray] = None) -> float:
 
 
 def read_xml(path, verbose=False, write_fe=False,
-             free_mask: Optional[np.ndarray] = None) -> Tuple[List[float], List[float]]:
+             free_mask: np.ndarray | None = None) -> tuple[list[float], list[float]]:
     """Read a vasprun.xml and return max forces and energies per ionic step.
 
     Parameters
@@ -128,31 +130,27 @@ def read_xml(path, verbose=False, write_fe=False,
         Per-component free/frozen mask; passed to get_max_f.
     """
     if not os.path.isfile(path):
-        raise FileNotFoundError("No such file: {}".format(path))
+        raise FileNotFoundError(f"No such file: {path}")
 
     print(path)
     traj = read_vasp_xml(path, index=slice(0, None))
 
-    if write_fe:
-        fe_path = os.path.join(os.path.dirname(os.path.abspath(path)), 'fe.dat')
-        fe = open(fe_path, 'w')
+    fe_path = os.path.join(os.path.dirname(os.path.abspath(path)), 'fe.dat') if write_fe else None
+    with open(fe_path, 'w') if write_fe else nullcontext() as fe:
+        forces = []
+        energies = []
+        for i, atoms in enumerate(traj):
+            energies.append(atoms.get_potential_energy())
+            forces.append(get_max_f(atoms, free_mask=free_mask))
+            if verbose:
+                print(print_format.format(i, forces[-1], energies[-1], energies[-1] - energies[0]))
+            if write_fe:
+                fe.write(print_format.format(i, forces[-1], energies[-1], energies[-1] - energies[0]) + '\n')
 
-    forces = []
-    energies = []
-    for i, atoms in enumerate(traj):
-        energies.append(atoms.get_potential_energy())
-        forces.append(get_max_f(atoms, free_mask=free_mask))
-        if verbose:
-            print(print_format.format(i, forces[-1], energies[-1], energies[-1] - energies[0]))
-        if write_fe:
-            fe.write(print_format.format(i, forces[-1], energies[-1], energies[-1] - energies[0]) + '\n')
-
-    if write_fe:
-        fe.close()
     return forces, energies
 
 
-def get_all_xmls(path, verbose=False) -> List[str]:
+def get_all_xmls(path, verbose=False) -> list[str]:
     """Get all vasprun.xml files in path and its numeric subdirectories."""
     files = natsorted(glob.glob(os.path.join(path, '*/vasprun.xml'), recursive=True))
     if os.path.isfile(os.path.join(path, 'vasprun.xml')):
@@ -161,7 +159,7 @@ def get_all_xmls(path, verbose=False) -> List[str]:
 
 
 def process_all_xmls(path, verbose=False, write_json=False,
-                     poscar_path: Optional[str] = None) -> Dict[str, List[float]]:
+                     poscar_path: str | None = None) -> dict[str, list[float]]:
     """Process all vasprun.xml files in path and numeric subdirectories.
 
     Parameters
@@ -195,30 +193,30 @@ def process_all_xmls(path, verbose=False, write_json=False,
     for f in files:
         folder = os.path.dirname(os.path.abspath(f))
         if (not os.path.basename(folder).isdigit()) and \
-                (not os.path.realpath(folder) == os.path.realpath(path)):
+                (os.path.realpath(folder) != os.path.realpath(path)):
             if verbose:
-                print("Not using {}".format(folder))
+                print(f"Not using {folder}")
             continue
         fe_dat = os.path.join(folder, 'fe.dat')
         # Skip cache when a selective-dynamics mask is active to avoid stale
         # values from a previous run without the mask.
         if free_mask is None and os.path.isfile(fe_dat):
             if verbose:
-                print("Adding {}".format(folder))
+                print(f"Adding {folder}")
         else:
-            print("Generating fe.dat in {}".format(folder))
+            print(f"Generating fe.dat in {folder}")
             read_xml(f, verbose=verbose, write_fe=True, free_mask=free_mask)
             assert os.path.isfile(fe_dat), \
-                "Problem generating fe.dat in {:}".format(folder)
+                f"Problem generating fe.dat in {folder}"
         to_add = np.loadtxt(fe_dat)
         # handle single-entry files
         if to_add.shape == (4,):
             to_add = to_add.reshape(1, 4)
         assert to_add.shape[1] == 4, \
-            "Problem with the shape of the data in {:}".format(folder)
+            f"Problem with the shape of the data in {folder}"
         data.append(to_add)
         if verbose:
-            print("Found {} values".format(len(data[-1])))
+            print(f"Found {len(data[-1])} values")
 
     combined = {'force': [], 'energy': []}
     for d in data:
@@ -238,7 +236,7 @@ def plot_fe(combined, filename, lw=2, show=False) -> None:
     """Plot the forces and energies."""
     nItems = len(combined['force'])
     xAxis = list(range(1, nItems + 1))
-    fig, ax1 = plt.subplots()
+    _fig, ax1 = plt.subplots()
     plt.xlabel('Step #')
     color = 'black'
     ax1.set_ylabel(r'$\Delta E$ [eV]', color=color)

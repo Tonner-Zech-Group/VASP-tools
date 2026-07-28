@@ -5,11 +5,12 @@
 # 2022/04/04
 #
 # You can import the module and then call .main() or use it as a script
-from pymatgen.io.vasp.outputs import Elfcar
-from pymatgen.io.ase import AseAtomsAdaptor
-from ase.io.cube import write_cube
-import numpy as np
 import os
+
+import numpy as np
+from ase.io.cube import write_cube
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.io.vasp.outputs import Elfcar
 
 
 def elf2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_integrals=False):
@@ -18,21 +19,21 @@ def elf2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spi
     spin_integrals = []
     for iFile, inFile in enumerate(inFiles):
         if not os.path.isfile(inFile):
-            raise ValueError('File {:} does not exist'.format(inFile))
+            raise ValueError(f'File {inFile} does not exist')
 
         # if output exists mv to .bak
         if os.path.isfile(outFiles[iFile]):
             if verbose:
-                print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
+                print(f'ATTENTION: {outFiles[iFile]} exists, moving to *.bak')
             os.rename(outFiles[iFile], outFiles[iFile]+'.bak')
 
         if verbose:
-            print("Reading {}".format(inFile))
+            print(f"Reading {inFile}")
         full_elfcar = Elfcar.from_file(inFile)
-        spinpol = 'diff' in full_elfcar.data.keys()
+        spinpol = 'diff' in full_elfcar.data
         #pymatgen: "total" key refers to Spin.up, and "diff" refers to Spin.down.
         if return_spin_integrals and not spinpol:
-            raise ValueError("File {} is not spinpolarized!".format(inFile))
+            raise ValueError(f"File {inFile} is not spinpolarized!")
         shape = full_elfcar.data['total'].shape
         n_data = np.prod(shape)
 
@@ -46,13 +47,13 @@ def elf2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spi
         if return_spin_integrals:
             spin_integrals.append((np.sum(np.abs(full_elfcar.data['total'])), np.sum(np.abs(full_elfcar.data['diff']))))
         if verbose:
-            print("Shape of data: {}".format(shape))
-            print("Total number of datapoints: {}".format(n_data))
+            print(f"Shape of data: {shape}")
+            print(f"Total number of datapoints: {n_data}")
             if return_integrals:
                 integral = integrals[-1]
             else:
                 integral = np.sum(np.abs(full_data))
-            print("Integral of total data is {}".format(integral))
+            print(f"Integral of total data is {integral}")
             if spinpol:
                 if return_spin_integrals:
                     spin_integral = spin_integrals[-1]
@@ -65,25 +66,25 @@ def elf2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spi
 
         # write cubes
         if spinpol:
-            filename = "{}_up.cube".format(outFiles[iFile])
+            filename = f"{outFiles[iFile]}_up.cube"
             if verbose:
-                print("Writing {}".format(filename))
+                print(f"Writing {filename}")
             with open(filename, 'w') as f:
                 write_cube(f, atoms, data=full_elfcar.data['total'], origin=origin)
-            filename = "{}_down.cube".format(outFiles[iFile])
+            filename = f"{outFiles[iFile]}_down.cube"
             if verbose:
-                print("Writing {}".format(filename))
+                print(f"Writing {filename}")
             with open(filename, 'w') as f:
                 write_cube(f, atoms, data=full_elfcar.data['diff'], origin=origin)
-            filename = "{}_diff.cube".format(outFiles[iFile])
+            filename = f"{outFiles[iFile]}_diff.cube"
             if verbose:
-                print("Writing {}".format(filename))
+                print(f"Writing {filename}")
             with open(filename, 'w') as f:
                 write_cube(f, atoms, data=full_elfcar.data['total']-full_elfcar.data['diff'], origin=origin)
         else:
-            filename = "{}.cube".format(outFiles[iFile])
+            filename = f"{outFiles[iFile]}.cube"
             if verbose:
-                print("Writing {}".format(filename))
+                print(f"Writing {filename}")
             with open(filename, 'w') as f:
                 write_cube(f, atoms, data=full_data, origin=origin)
 

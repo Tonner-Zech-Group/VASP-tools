@@ -32,7 +32,7 @@ jobs:
         pip install .
     - name: Lint with Ruff
       run: |
-        pip install ruff
+        pip install ruff==0.16.0
         ruff check --output-format=github .
       continue-on-error: false
     - name: Test with pytest and coverage

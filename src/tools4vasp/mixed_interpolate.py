@@ -3,18 +3,20 @@
 # Script that mixes geodesic interpolation for the molecule and idpp/direct interpolation for the surface
 # by F. Thiemann & J. Schramm
 
-from ase.io import read
-from ase import Atoms
-from ase.mep import NEB
-from ase.calculators.lj import LennardJones as LJ
-from ase.io import Trajectory
-from ase.visualize import view
 from pathlib import Path
-from geodesic_interpolate.interpolation import redistribute
-from geodesic_interpolate.geodesic import Geodesic
-from tools4vasp.split_surf_and_mol import detect_surf
+
 import numpy as np
+from ase import Atoms
+from ase.calculators.lj import LennardJones as LJ
+from ase.io import Trajectory, read
+from ase.mep import NEB
+from ase.visualize import view
+from geodesic_interpolate.geodesic import Geodesic
+from geodesic_interpolate.interpolation import redistribute
 from scipy.optimize import leastsq
+
+from tools4vasp.split_surf_and_mol import detect_surf
+
 
 ######## Functions as copied from geodesic_wrapper.py ########
 def ase_geodesic_interpolate(initial_mol,final_mol, n_images = 20, friction = 0.01, dist_cutoff = 3, scaling = 1.7, sweep = None, tol = 0.002, maxiter = 15, microiter = 20):
@@ -37,20 +39,12 @@ def ase_geodesic_interpolate(initial_mol,final_mol, n_images = 20, friction = 0.
 
     if sweep is None:
         sweep = len(atoms) > 35
-    try:
-        if sweep:
-            smoother.sweep(tol=tol, max_iter=maxiter, micro_iter=microiter)
-        else:
-            smoother.smooth(tol=tol, max_iter=maxiter)
-    finally:
+    if sweep:
+        smoother.sweep(tol=tol, max_iter=maxiter, micro_iter=microiter)
+    else:
+        smoother.smooth(tol=tol, max_iter=maxiter)
 
-        all_mols = []
-        
-        for pos in smoother.path:
-            mol = Atoms(atom_string, pos)
-            all_mols.append(mol)
-        
-        return all_mols
+    return [Atoms(atom_string, pos) for pos in smoother.path]
 
 ########## Functions copied from geodesic_wrapper.py ##########
 def interpolate_traj(initial,final,LEN,method,calculator=None):
@@ -184,7 +178,7 @@ def main():
         mol_indices = mol.get_tags()
     elif len(args.molind) == 1:
         mol_indices = list(range(len(initial_mol) - args.molind[0], len(initial_mol)))
-        surf_indices = list(range(0, len(initial_mol) - args.molind[0]))
+        surf_indices = list(range(len(initial_mol) - args.molind[0]))
     else:
         mol_indices = args.molind
         surf_indices = [i for i in range(len(initial_mol)) if i not in mol_indices]

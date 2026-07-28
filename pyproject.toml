@@ -71,3 +71,16 @@ package-dir = {'' = 'src'}
 [tool.pytest.ini_options]
 testpaths = ["test"]
 addopts = "-v"
+
+[tool.ruff.lint.per-file-ignores]
+# Module names mirror the published CLI entry points in [project.scripts]
+# above (e.g. tools4vasp.add_MODECAR:main) - renaming them is a breaking
+# change for this PyPI package, so N999 is ignored here rather than fixed.
+"src/tools4vasp/add_MODECAR.py" = ["N999"]
+"src/tools4vasp/getPOTCAR.py" = ["N999"]
+"src/tools4vasp/plotHOMA_withPBC.py" = ["N999"]
+"src/tools4vasp/plotIRC.py" = ["N999"]
+"src/tools4vasp/plotNEB.py" = ["N999"]
+"src/tools4vasp/vaspGetEF.py" = ["N999"]
+"src/tools4vasp/viewMode.py" = ["N999"]
+"src/tools4vasp/xyz2POSCAR.py" = ["N999"]

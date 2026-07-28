@@ -1,6 +1,6 @@
 from io import StringIO
-from tools4vasp.vaspcheck import _get_elements_from_outcar
 
+from tools4vasp.vaspcheck import _get_elements_from_outcar
 
 file_content = """
 asdfasdf

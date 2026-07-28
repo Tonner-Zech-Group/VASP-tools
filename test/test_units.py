@@ -9,7 +9,6 @@ from io import StringIO
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # vaspcheck — element extraction from OUTCAR
 # (existing test preserved here for completeness; also kept in test_tools4vasp.py)
@@ -73,8 +72,9 @@ def test_calc_rms_known_value():
 # ---------------------------------------------------------------------------
 
 def test_get_max_f_single_atom():
-    from tools4vasp.vaspGetEF import get_max_f
     from unittest.mock import MagicMock
+
+    from tools4vasp.vaspGetEF import get_max_f
 
     atoms = MagicMock()
     atoms.get_forces.return_value = np.array([[3.0, 4.0, 0.0]])
@@ -82,8 +82,9 @@ def test_get_max_f_single_atom():
 
 
 def test_get_max_f_picks_maximum():
-    from tools4vasp.vaspGetEF import get_max_f
     from unittest.mock import MagicMock
+
+    from tools4vasp.vaspGetEF import get_max_f
 
     atoms = MagicMock()
     atoms.get_forces.return_value = np.array([
@@ -96,8 +97,9 @@ def test_get_max_f_picks_maximum():
 
 def test_get_max_f_mask_suppresses_frozen_atom():
     """A fully-frozen atom (mask all False) must not contribute to max force."""
-    from tools4vasp.vaspGetEF import get_max_f
     from unittest.mock import MagicMock
+
+    from tools4vasp.vaspGetEF import get_max_f
 
     atoms = MagicMock()
     # atom 0 has large forces but is fully frozen; atom 1 is free
@@ -112,8 +114,9 @@ def test_get_max_f_mask_suppresses_frozen_atom():
 
 def test_get_max_f_mask_partial_component():
     """A per-component mask (T T F) must zero only the frozen component."""
-    from tools4vasp.vaspGetEF import get_max_f
     from unittest.mock import MagicMock
+
+    from tools4vasp.vaspGetEF import get_max_f
 
     atoms = MagicMock()
     # One atom, z component frozen.  Active force: sqrt(3^2 + 4^2) = 5.
@@ -124,8 +127,9 @@ def test_get_max_f_mask_partial_component():
 
 def test_get_max_f_no_mask_unchanged():
     """Without a mask the function behaves exactly as before."""
-    from tools4vasp.vaspGetEF import get_max_f
     from unittest.mock import MagicMock
+
+    from tools4vasp.vaspGetEF import get_max_f
 
     atoms = MagicMock()
     atoms.get_forces.return_value = np.array([[0.0, 0.0, 7.0]])
@@ -278,6 +282,7 @@ def test_get_kgrid_large_spacing_gives_one(poscar_path, monkeypatch):
     """Very large kspacing should result in a 1×1×1 grid (minimum enforced)."""
     import io
     import sys
+
     from tools4vasp.kspacing2kgrid import get_kgrid
     monkeypatch.chdir(poscar_path.parent)
 
@@ -303,6 +308,7 @@ def test_get_kspacing_output_contains_values(poscar_kpoints_dir, monkeypatch):
     """get_kspacing() output must report the kgrid and computed kspacing."""
     import io
     import sys
+
     from tools4vasp.kgrid2kspacing import get_kspacing
     monkeypatch.chdir(poscar_kpoints_dir)
 
@@ -326,7 +332,8 @@ def test_write_modecar_positive_spacing(tmp_path):
     outfile = str(tmp_path / "MODECAR")
     write_modecar(frequency, outfile)
 
-    line = open(outfile).readlines()[0]
+    with open(outfile) as f:
+        line = f.readlines()[0]
     # Positive value → "    1.0000000000E+00"  (4 spaces before)
     assert "    1.0000000000E+00" in line
     # Negative value → "   -2.0000000000E+00"  (3 spaces before minus sign)
@@ -349,6 +356,7 @@ def test_plotNEB_main_is_callable():
 def test_neb2movie_wrap_is_bool():
     """The wrap parameter default must be a bool, not a string."""
     import inspect
+
     from tools4vasp import neb2movie
     sig = inspect.signature(neb2movie.run)
     default = sig.parameters["wrap"].default
@@ -382,6 +390,7 @@ def test_read_modecar_parses_correctly(tmp_path):
 def test_increment_positions_applies_scaled_mode():
     """increment_positions() must shift positions by mode * factor."""
     import ase
+
     from tools4vasp.viewMode import increment_positions
     atoms = ase.Atoms('H', positions=[[0.0, 0.0, 0.0]], cell=[10, 10, 10])
     mode = np.array([[1.0, 2.0, 3.0]])
@@ -394,6 +403,7 @@ def test_increment_positions_applies_scaled_mode():
 def test_make_animation_internal_frames_divisible_by_4():
     """make_animation() must adjust frames so (len(anim) - 1) % 4 == 0."""
     import ase
+
     from tools4vasp.viewMode import make_animation
     atoms = ase.Atoms('H', positions=[[0.0, 0.0, 0.0]], cell=[10, 10, 10])
     mode = np.array([[0.1, 0.0, 0.0]])
@@ -407,6 +417,7 @@ def test_make_animation_internal_frames_divisible_by_4():
 def test_make_animation_first_frame_is_original():
     """make_animation() first frame must equal the original atoms."""
     import ase
+
     from tools4vasp.viewMode import make_animation
     atoms = ase.Atoms('H', positions=[[1.0, 2.0, 3.0]], cell=[10, 10, 10])
     mode = np.array([[1.0, 0.0, 0.0]])
@@ -428,6 +439,7 @@ def test_get_atomic_mass_hydrogen_positive():
 def test_generate_mw_divides_by_sqrt_mass():
     """generate_mw() must divide each displacement component by sqrt(atom mass)."""
     from unittest.mock import MagicMock
+
     from tools4vasp.freq2mode import generate_mw
     atoms = MagicMock()
     atoms.get_masses.return_value = np.array([4.0])  # sqrt(4) = 2
@@ -588,6 +600,7 @@ Cartesian
 def test_neb2movie_prefers_contcar(tmp_path):
     """main() must read CONTCAR for intermediate images when it exists."""
     from unittest.mock import MagicMock, patch
+
     from tools4vasp import neb2movie
 
     for d in ['00', '01', '02']:
@@ -608,6 +621,7 @@ def test_neb2movie_prefers_contcar(tmp_path):
 def test_neb2movie_falls_back_to_poscar(tmp_path):
     """main() must use POSCAR for all images when no CONTCAR exists."""
     from unittest.mock import MagicMock, patch
+
     from tools4vasp import neb2movie
 
     for d in ['00', '01', '02']:
@@ -638,6 +652,7 @@ def test_neb2movie_raises_if_neither_poscar_nor_contcar(tmp_path):
 def test_chgcar2cube_returns_integral(tmp_path):
     """chgcar2cube() must return the computed integral when return_integrals=True."""
     from unittest.mock import MagicMock, patch
+
     from tools4vasp.chgcar2cube import chgcar2cube
 
     infile = tmp_path / "CHGCAR"
@@ -659,6 +674,7 @@ def test_chgcar2cube_returns_integral(tmp_path):
 def test_chgcar2cube_spinpol_writes_mag_cube(tmp_path):
     """chgcar2cube() must write a _mag.cube file for spin-polarised input."""
     from unittest.mock import MagicMock, patch
+
     from tools4vasp.chgcar2cube import chgcar2cube
 
     infile = tmp_path / "CHGCAR"
@@ -688,6 +704,7 @@ def test_chgcar2cube_spinpol_writes_mag_cube(tmp_path):
 def test_elf2cube_spinpol_writes_three_cubes(tmp_path):
     """elf2cube() must write _up, _down, and _diff cube files for spinpol input."""
     from unittest.mock import MagicMock, patch
+
     from tools4vasp.elf2cube import elf2cube
 
     infile = tmp_path / "ELFCAR"
@@ -716,6 +733,7 @@ def test_elf2cube_spinpol_writes_three_cubes(tmp_path):
 def test_elf2cube_returns_integral(tmp_path):
     """elf2cube() must return the computed integral when return_integrals=True."""
     from unittest.mock import MagicMock, patch
+
     from tools4vasp.elf2cube import elf2cube
 
     infile = tmp_path / "ELFCAR"

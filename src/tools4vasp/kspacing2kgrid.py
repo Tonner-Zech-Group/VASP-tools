@@ -7,13 +7,13 @@
 
 
 def get_kgrid(kspacing):
-    from ase import io
     import numpy as np
+    from ase import io
     mol = io.read('POSCAR')
     cellparams = mol.cell.cellpar()
     r_cell = mol.cell.reciprocal()
     print("The cell parameters are |a|={} |b|={} |c|={} alpha={} beta={} gamma={}".format(*[ round(x,2) for x in cellparams]))
-    print("The reciprocal cell is: {}".format(r_cell))
+    print(f"The reciprocal cell is: {r_cell}")
     kgrid = [ int(max(1, np.ceil(np.linalg.norm(r_cell[i])*2*np.pi/kspacing))) for i in range(3)]
     print("The corresponding KGRID for KSPACING {}Å^-1 is: {} {} {}".format(kspacing, *kgrid))
 
