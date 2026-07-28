@@ -5,12 +5,14 @@
 # by Jakob Schramm
 # 2026/03/26
 #
+import argparse
+
 import numpy as np
-from ase.io import read
 from ase.build.tools import sort
 from ase.constraints import FixAtoms
+from ase.io import read
 from scipy.optimize import leastsq
-import argparse
+
 
 def distance_to_plane(params,X):
     distance = ((params[0:3]*X.T).sum(axis=1) + params[3])/np.linalg.norm(params[0:3])

@@ -7,13 +7,13 @@
 
 
 def get_kspacing():
-    from ase import io
     import numpy as np
+    from ase import io
     mol = io.read('POSCAR')
     cellparams = mol.cell.cellpar()
     r_cell = mol.cell.reciprocal()
     print("The cell parameters are |a|={} |b|={} |c|={} alpha={} beta={} gamma={}".format(*[ round(x,2) for x in cellparams]))
-    print("The reciprocal cell is: {}".format(r_cell))
+    print(f"The reciprocal cell is: {r_cell}")
     with open('KPOINTS', 'r') as f:
         kpoints = f.readlines()
     if kpoints[1].strip() != "0":

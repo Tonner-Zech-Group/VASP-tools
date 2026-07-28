@@ -4,13 +4,16 @@
 # by Patrick Melix
 # 2021/06/15
 #
-from io import TextIOWrapper
-from ase.calculators.vasp.vasp import Vasp
-from ase import io
+from __future__ import annotations
+
 import os
 import re
+from io import TextIOWrapper
+
 import numpy as np
-from typing import Optional
+from ase import io
+from ase.calculators.vasp.vasp import Vasp
+
 from tools4vasp._fileutils import iter_lines_reversed
 
 # OUTCAR final-energy block, e.g.:
@@ -49,7 +52,7 @@ def _get_elements_from_outcar(f: TextIOWrapper) -> list:
             elements_poscar[i] = elements_poscar[i].split('_')[0]
     return elements_poscar, elements_potcar
 
-def check_vasp_potcar_order(path) -> Optional[str]:
+def check_vasp_potcar_order(path) -> str | None:
     """Check VASP calculations for proper POTCAR order.
 
     Input Parameters
@@ -70,7 +73,7 @@ def check_vasp_potcar_order(path) -> Optional[str]:
         return None
 
 
-def check_vasp_occupations(calc) -> Optional[str]:
+def check_vasp_occupations(calc) -> str | None:
     """Check VASP calculations for non-integer occupations.
     Input Parameters
     ----------------
@@ -144,10 +147,10 @@ def _get_entropy_energies(outcar, chunk_size=64 * 1024) -> tuple:
                 if lines_above_entropy >= 4:
                     # unpaired entropy line — keep searching earlier ones
                     e_wo_entropy = None
-    raise ValueError("Could not parse TOTEN/entropy from {}".format(outcar))
+    raise ValueError(f"Could not parse TOTEN/entropy from {outcar}")
 
 
-def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
+def check_vasp_electronic_entropy(path, calc, limit=0.001) -> str | None:
     """Check if the electronic entropy is larger than limit.
     
     Input Parameters
@@ -168,14 +171,14 @@ def check_vasp_electronic_entropy(path, calc, limit=0.001) -> Optional[str]:
     ret = check_vasp_occupations(calc)
     # non-integer occupations
     if ret:
-        print("Integer occupation check returned: {:}".format(ret))
+        print(f"Integer occupation check returned: {ret}")
         outcar = os.path.join(path, "OUTCAR")
         toten, e_wo_entropy = _get_entropy_energies(outcar)
         entropy = toten - e_wo_entropy
         mol = io.read(os.path.join(path, 'CONTCAR'))
         entropy_per_atom = entropy / len(mol)
         if not entropy_per_atom < limit:
-            return "Entropy per atom is {:}eV".format(entropy_per_atom)
+            return f"Entropy per atom is {entropy_per_atom}eV"
     return
         
 

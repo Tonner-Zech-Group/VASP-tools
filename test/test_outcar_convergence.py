@@ -4,6 +4,20 @@ import gzip
 from unittest.mock import patch
 
 import pytest
+from conftest import (
+    _POTCAR_POSCAR_HEADER_ALIGNED,
+    _POTCAR_POSCAR_HEADER_LEADING_SPACE,
+    _POTCAR_POSCAR_HEADER_MISMATCHED,
+    _POTCAR_POSCAR_HEADER_PAW_SUFFIX,
+    _POTCAR_POSCAR_HEADER_SINGLE,
+    OUTCAR_ALIGNED_CONVERGED,
+    OUTCAR_MISMATCHED_CONVERGED,
+    OUTCAR_MULTI_STEP_CONVERGED,
+    OUTCAR_MULTI_STEP_PARTIAL,
+    OUTCAR_ONE_STEP_CONVERGED,
+    OUTCAR_ONE_STEP_CONVERGED_V6,
+    OUTCAR_ONE_STEP_SCF_FAILED,
+)
 
 from tools4vasp.outcar_convergence import (
     _find_outcar,
@@ -14,21 +28,6 @@ from tools4vasp.outcar_convergence import (
     check_scf_convergence_per_step,
     run,
 )
-from conftest import (
-    OUTCAR_ALIGNED_CONVERGED,
-    OUTCAR_MISMATCHED_CONVERGED,
-    OUTCAR_MULTI_STEP_CONVERGED,
-    OUTCAR_MULTI_STEP_PARTIAL,
-    OUTCAR_ONE_STEP_CONVERGED,
-    OUTCAR_ONE_STEP_CONVERGED_V6,
-    OUTCAR_ONE_STEP_SCF_FAILED,
-    _POTCAR_POSCAR_HEADER_ALIGNED,
-    _POTCAR_POSCAR_HEADER_LEADING_SPACE,
-    _POTCAR_POSCAR_HEADER_MISMATCHED,
-    _POTCAR_POSCAR_HEADER_PAW_SUFFIX,
-    _POTCAR_POSCAR_HEADER_SINGLE,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers

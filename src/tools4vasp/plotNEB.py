@@ -7,10 +7,12 @@
 # You can import the module and then call .main() or use it as a script
 import argparse
 import os
+
 import numpy as np
-from matplotlib.ticker import MaxNLocator
 from ase.units import create_units
 from matplotlib import pyplot as plt
+from matplotlib.ticker import MaxNLocator
+
 from tools4vasp._fileutils import iter_lines_reversed
 
 
@@ -84,7 +86,7 @@ def run(filename='NEB.png', presentation=False,
             conv /= unitDict[u]
     else:
         conv *= unitDict[unit]
-    print("Unit conversion factor from eV to {}: {:}".format(unit, conv))
+    print(f"Unit conversion factor from eV to {unit}: {conv}")
 
     if load_dispersion:
         import json
@@ -98,7 +100,7 @@ def run(filename='NEB.png', presentation=False,
     nebData = np.loadtxt('neb.dat')
     print("Energy and forces loaded.")
     nImages = len(nebData)
-    print("{:} data points found.".format(nImages))
+    print(f"{nImages} data points found.")
 
     reactionCoord = [ s[1] for s in spline ]
     #images = [ d[0] for d in nebData ]
@@ -126,10 +128,10 @@ def run(filename='NEB.png', presentation=False,
         print("Collecting dispersion energies from OUTCARs.")
         dispersion = []
         for i in range(nImages):
-            path = "{:02d}".format(i)
-            assert os.path.isdir(path), "Could not find dir {}".format(path)
+            path = f"{i:02d}"
+            assert os.path.isdir(path), f"Could not find dir {path}"
             outcar = os.path.join(path,'OUTCAR')
-            assert os.path.isfile(outcar), "Could not find file {}".format(outcar)
+            assert os.path.isfile(outcar), f"Could not find file {outcar}"
             dispE = None
             # the last Edisp entry is wanted — read the file backwards so
             # huge OUTCARs only have their tail touched
@@ -140,7 +142,7 @@ def run(filename='NEB.png', presentation=False,
                         break
             if dispE is None:
                 raise ValueError(
-                    "No 'Edisp (eV)' entry found in {}".format(outcar))
+                    f"No 'Edisp (eV)' entry found in {outcar}")
             dispersion.append(dispE)
         dispersion = np.array(dispersion)
         dispersion -= dispersion[0]

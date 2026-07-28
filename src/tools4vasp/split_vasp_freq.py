@@ -23,16 +23,19 @@ Usage as a python module
 
 """
 
-import numpy as np
+from __future__ import annotations
+
+import glob
+import os
 from math import ceil
+
+import numpy as np
 from ase import io
 from ase.constraints import FixAtoms
-from ase.vibrations.data import VibrationsData
-from ase.vibrations import Vibrations
 from ase.geometry import find_mic
-import os
-import glob
-from typing import Union
+from ase.vibrations import Vibrations
+from ase.vibrations.data import VibrationsData
+
 
 def log(msg, verbose=True):
     if verbose:
@@ -59,11 +62,11 @@ def read_input_structure(input_file, verbose=True, use_only_indices=None) -> dic
         Dictionary with keys 'atoms', 'constraints', 'indices', 'n_free_atoms'
     """
     res = {}
-    assert os.path.isfile(input_file), "File {:} does not exist".format(input_file)
-    log("Reading {}".format(input_file), verbose=verbose)
+    assert os.path.isfile(input_file), f"File {input_file} does not exist"
+    log(f"Reading {input_file}", verbose=verbose)
     res['atoms'] = io.read(input_file)
     n_atoms = len(res['atoms'])
-    log("Number of atoms: {}".format(n_atoms), verbose=verbose)
+    log(f"Number of atoms: {n_atoms}", verbose=verbose)
     if use_only_indices:
         log("Setting new additional constraint based on use_only_indices", verbose=verbose)
         new_constraint = FixAtoms(np.delete(np.arange(n_atoms), use_only_indices))
@@ -75,7 +78,7 @@ def read_input_structure(input_file, verbose=True, use_only_indices=None) -> dic
         log("Found {} constraints!".format(len(res['constraints'])), verbose=verbose)
         for const in res['constraints']:
             if not isinstance(const, FixAtoms):
-                raise RuntimeError("Only FixAtoms constraints are supported!")
+                raise TypeError("Only FixAtoms constraints are supported!")
             res['indices'] = np.delete(res['indices'], const.index)
         res['n_free_atoms'] = len(res['indices'])
     log("Remaining unconstrained atoms: {}".format(res['n_free_atoms']), verbose=verbose)
@@ -99,15 +102,15 @@ def split(input_file, n_atoms_per_calc, cwd=".", verbose=True) -> None:
         Print information to stdout?
     """
     info = read_input_structure(input_file, verbose=verbose)
-    log("Number of atoms per calculation: {}".format(n_atoms_per_calc), verbose=verbose)
+    log(f"Number of atoms per calculation: {n_atoms_per_calc}", verbose=verbose)
     n_calcs = ceil(info['n_free_atoms'] / n_atoms_per_calc)
-    log("Number of calculations: {}".format(n_calcs), verbose=verbose)
-    log("Will now create {} subfolders with corresponding POSCARs".format(n_calcs), verbose=verbose)
+    log(f"Number of calculations: {n_calcs}", verbose=verbose)
+    log(f"Will now create {n_calcs} subfolders with corresponding POSCARs", verbose=verbose)
     for i_calc in range(n_calcs):
-        folder_name = "freq_{:03d}".format(i_calc+1)
+        folder_name = f"freq_{i_calc+1:03d}"
         folder_path = os.path.join(cwd, folder_name)
         if os.path.isdir(folder_path):
-            raise RuntimeError("Folder {} already exists!".format(folder_path))
+            raise RuntimeError(f"Folder {folder_path} already exists!")
         os.mkdir(folder_path)
         tmp_atoms = info['atoms'].copy()
         tmp_constraints = info['constraints'].copy()
@@ -143,12 +146,12 @@ def get_nfree_delta(incar_path, verbose=True) -> int:
     else:
         raise RuntimeError("Could not find NFREE in INCAR!")
     if delta:
-        log("Found a delta value (POTIM) of {} Angstrom.".format(delta), verbose=verbose)
+        log(f"Found a delta value (POTIM) of {delta} Angstrom.", verbose=verbose)
     else:
         raise RuntimeError("Could not find POTIM in INCAR!")
     return n_displacements, delta
 
-def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_checks=[], use_only_indices=None) -> Union[None, Vibrations]:
+def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_checks=None, use_only_indices=None) -> None | Vibrations:
     """
     Combine the results of a split VASP frequency calculation.
 
@@ -178,13 +181,15 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
     -------
     None or ase.vibrations.Vibrations object
     """
+    if sanity_checks is None:
+        sanity_checks = []
     name = os.path.join(cwd, "freq")
     info = read_input_structure(input_file, verbose=verbose, use_only_indices=use_only_indices)
     n_free, delta = get_nfree_delta(os.path.join(os.path.dirname(input_file), "INCAR"), verbose=verbose)
     dirs = [ os.path.normpath(d) for d in glob.glob(os.path.join(cwd, "{}_*".format("freq"))) if os.path.isdir(d) ]
     dirs.sort()
     n_calcs = len(dirs)
-    log("Found {} subfolders with frequency job parts.".format(n_calcs), verbose=verbose)
+    log(f"Found {n_calcs} subfolders with frequency job parts.", verbose=verbose)
 
     # Setup the ASE Vibrations Object
     vib = Vibrations(info['atoms'], indices=info['indices'], name=name, delta=delta, nfree=n_free)
@@ -194,19 +199,19 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
     results = { 'eq': {} } # store the equilibrium data in a separate dict
     vibname2dir = {} # map vibration name to directory and index
     for i_dir, dir in enumerate(dirs):
-        log("Reading data from {}".format(dir), verbose=verbose)
+        log(f"Reading data from {dir}", verbose=verbose)
         results[dir] = read_input_structure(os.path.join(dir, "POSCAR"), verbose=False)
         #load job using ase
         if not os.path.isfile(os.path.join(dir, "vasprun.xml")):
-            log("WARNING: No vasprun.xml found in {}, skipping.".format(dir), verbose=verbose)
+            log(f"WARNING: No vasprun.xml found in {dir}, skipping.", verbose=verbose)
             continue
         results[dir]['atoms'] = io.read(os.path.join(dir, "vasprun.xml"), format='vasp-xml', index=slice(0, None))
         # basic check if job succeeded
-        assert results[dir]['atoms'][0].calc is not None, "Could not read VASP calculation from {}".format(dir)
+        assert results[dir]['atoms'][0].calc is not None, f"Could not read VASP calculation from {dir}"
         # perform custom sanity checks
         for func in sanity_checks:
-            log("Running custom sanity check {} on {}".format(func.__name__, dir), verbose=verbose)
-            assert func(dir), "Custom sanity check {} failed for {}".format(func.__name__, dir)
+            log(f"Running custom sanity check {func.__name__} on {dir}", verbose=verbose)
+            assert func(dir), f"Custom sanity check {func.__name__} failed for {dir}"
         # in the first round save equilibrium forces otherwise
         # xml has originial structure as first entry, so we need to remove it
         # make sure to always use apply_constraint=False, otherwise ASE sets the forces to zero!
@@ -239,10 +244,9 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
             diff_vecs, diffs = find_mic(pos_moving - ref_pos[indices], cell=info['atoms'].cell, pbc=True)
             # take care of central and four displacements
             tmp_delta = delta
-            if n_free == 4:
-                #check if we find a difference of delta*2
-                if np.any(np.abs(diffs - delta*2) < 0.01):
-                    tmp_delta = delta*2
+            #check if we find a difference of delta*2
+            if n_free == 4 and np.any(np.abs(diffs - delta*2) < 0.01):
+                tmp_delta = delta*2
             # find the index where position difference is close to delta or delta*2
             # this is the index of the atom that was moved
             at_idx = np.argmin(np.abs(diffs - tmp_delta))
@@ -267,14 +271,14 @@ def combine(input_file, cwd=".", verbose=True, return_vibrations=False, sanity_c
     #cache = MultiFileJSONCache(name)
     vib.cache.clear() # remove all previous data
     for disp, ats in vib.iterdisplace():
-        assert disp.name in vibname2dir, "Could not find displacement {} in results!".format(disp.name)
+        assert disp.name in vibname2dir, f"Could not find displacement {disp.name} in results!"
         # save the forces as <name>.<label>.json
         # content of this file is a dict {'forces': np.ndarray}
         dir, idx = vibname2dir[disp.name]
         dct = {'forces': results[dir]['forces'][idx]}
         with vib.cache.lock(disp.name) as handle:
             if handle is None:
-                raise RuntimeError("There seems to be leftovers from {}".format(disp.name))
+                raise RuntimeError(f"There seems to be leftovers from {disp.name}")
             handle.save(dct)
     #vib.combine()
     vib.read()
@@ -317,7 +321,7 @@ def export_jmol(vib: Vibrations, output_file: str) -> None:
     with open(f"{output_file}.xyz", 'w') as f:
         vib._write_jmol(f)
 
-def export_xyz_traj(vib: Vibrations, output_file: str, index: int=None) -> None:
+def export_xyz_traj(vib: Vibrations, output_file: str, index: int | None = None) -> None:
     """Write the vibrational modes to a xyz trajectory file.
     
     Parameters
@@ -330,7 +334,7 @@ def export_xyz_traj(vib: Vibrations, output_file: str, index: int=None) -> None:
         Index of the mode to write. If None, all modes are written.
     """
     def _write_mode(vib_data, index, output_file):
-        with open("{}_{:03d}.xyz".format(output_file, index+1), 'w') as f:
+        with open(f"{output_file}_{index+1:03d}.xyz", 'w') as f:
             for frame in vib_data.iter_animated_mode(index):
                 frame.write(f, format='extxyz')
 

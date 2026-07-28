@@ -5,11 +5,12 @@
 # 2022/04/04
 #
 # You can import the module and then call .main() or use it as a script
-from pymatgen.io.vasp.outputs import Chgcar
-from pymatgen.io.ase import AseAtomsAdaptor
-from ase.io.cube import write_cube
-import numpy as np
 import os
+
+import numpy as np
+from ase.io.cube import write_cube
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.io.vasp.outputs import Chgcar
 
 
 def chgcar2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_spin_integrals=False, mult_volume=False):
@@ -18,20 +19,20 @@ def chgcar2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_
     spin_integrals = []
     for iFile,inFile in enumerate(inFiles):
         if not os.path.isfile(inFile):
-            raise ValueError('File {:} does not exist'.format(inFile))
+            raise ValueError(f'File {inFile} does not exist')
 
         #if output exists mv to .bak
         if os.path.isfile(outFiles[iFile]):
             if verbose:
-                print('ATTENTION: {:} exists, moving to *.bak'.format(outFiles[iFile]))
+                print(f'ATTENTION: {outFiles[iFile]} exists, moving to *.bak')
             os.rename(outFiles[iFile], outFiles[iFile]+'.bak')
 
         if verbose:
-            print("Reading {}".format(inFile))
+            print(f"Reading {inFile}")
         full_chgcar = Chgcar.from_file(inFile)
-        spinpol = 'diff' in full_chgcar.data.keys()
+        spinpol = 'diff' in full_chgcar.data
         if return_spin_integrals and not spinpol:
-            raise ValueError("File {} is not spinpolarized!".format(inFile))
+            raise ValueError(f"File {inFile} is not spinpolarized!")
         shape = full_chgcar.data['total'].shape
         n_data = np.prod(shape)
         
@@ -42,21 +43,21 @@ def chgcar2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_
             spin_integrals.append(np.sum(np.abs(full_chgcar.data['diff'])))
             spin_integrals[-1] /= n_data
         if verbose:
-            print("Shape of data: {}".format(shape))
-            print("Total number of datapoints: {}".format(n_data))
+            print(f"Shape of data: {shape}")
+            print(f"Total number of datapoints: {n_data}")
             if return_integrals:
                 integral = integrals[-1]
             else:
                 integral = np.sum(np.abs(full_chgcar.data['total']))
                 integral /= n_data
-            print("Integral of total data is {}".format(integral))
+            print(f"Integral of total data is {integral}")
             if spinpol:
                 if return_spin_integrals:
                     spin_integral = spin_integrals[-1]
                 else:
                     spin_integral = np.sum(np.abs(full_chgcar.data['diff']))
                     spin_integral /= n_data
-                print("Integral of diff data is {}".format(spin_integral))
+                print(f"Integral of diff data is {spin_integral}")
 
         origin = np.zeros(3)
         atoms = AseAtomsAdaptor.get_atoms(full_chgcar.structure)
@@ -71,15 +72,15 @@ def chgcar2cube(inFiles, outFiles, verbose=True, return_integrals=False, return_
         if spinpol:
             full_chgcar.data['diff'] /= factor
         #write cube
-        filename = "{}.cube".format(outFiles[iFile])
+        filename = f"{outFiles[iFile]}.cube"
         if verbose:
-            print("Writing {}".format(filename))
+            print(f"Writing {filename}")
         with open(filename, 'w') as f:
             write_cube(f, atoms, data=full_chgcar.data['total'], origin=origin)
         if spinpol:
-            filename = "{}_mag.cube".format(outFiles[iFile])
+            filename = f"{outFiles[iFile]}_mag.cube"
             if verbose:
-                print("Writing {}".format(filename))
+                print(f"Writing {filename}")
             with open(filename, 'w') as f:
                 write_cube(f, atoms, data=full_chgcar.data['diff'], origin=origin)
                 

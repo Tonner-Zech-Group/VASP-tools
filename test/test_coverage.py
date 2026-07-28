@@ -2,13 +2,12 @@
 Extended coverage tests — exercises previously uncovered code paths using
 mocking and lightweight fixtures. No real VASP installation needed.
 """
-import os
 import io
+import os
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-
 
 # ===========================================================================
 # vaspcheck
@@ -281,6 +280,7 @@ Cartesian
 def test_add_modecar_main(tmp_path, monkeypatch):
     """add_MODECAR.main() must read POSCAR+MODECAR and write an xyz file."""
     import ase
+
     from tools4vasp import add_MODECAR
 
     poscar = tmp_path / "POSCAR"
@@ -550,6 +550,7 @@ def test_plotNEB_plot_with_dispersion(tmp_path, neb_data):
 def test_plotNEB_main_load_dispersion(tmp_path, monkeypatch):
     """plotNEB.run() must load dispersion from json when load_dispersion is set."""
     import json
+
     from tools4vasp import plotNEB
     monkeypatch.chdir(tmp_path)
     (tmp_path / "spline.dat").write_text("dummy")
@@ -604,7 +605,7 @@ def test_plotIRC_read_sp_allow_freq_multi_step(tmp_path):
     sp1 = _make_sp_atoms(-100.0)
     sp2 = _make_sp_atoms(-99.0)
     with patch("tools4vasp.plotIRC.ase.io.read", return_value=[sp1, sp2]):
-        positions, energy = read_sp(str(tmp_path), allow_freq=True)
+        _positions, energy = read_sp(str(tmp_path), allow_freq=True)
     assert energy != 0
 
 
@@ -628,7 +629,7 @@ def test_plotIRC_read_irc(tmp_path):
         fake_structs.append(a)
 
     with patch("tools4vasp.plotIRC.ase.io.read", return_value=fake_structs):
-        init_pos, steps, energies = read_irc(str(tmp_path))
+        _init_pos, steps, energies = read_irc(str(tmp_path))
 
     assert len(steps) == 3
     assert len(energies) == 3
@@ -748,7 +749,7 @@ def test_export_xyz_traj_all_modes(tmp_path):
     export_xyz_traj(mock_vib, outfile, index=None)
 
     for i in range(1, n_modes + 1):
-        assert os.path.isfile("{:s}_{:03d}.xyz".format(outfile, i))
+        assert os.path.isfile(f"{outfile:s}_{i:03d}.xyz")
 
 
 # ===========================================================================
@@ -815,9 +816,9 @@ def test_chgcar2cube_raises_for_non_spinpol_spin_integral(tmp_path):
     mock_atoms = MagicMock()
 
     with patch("tools4vasp.chgcar2cube.Chgcar.from_file", return_value=mock_chgcar), \
-         patch("tools4vasp.chgcar2cube.AseAtomsAdaptor.get_atoms", return_value=mock_atoms):
-        with pytest.raises(ValueError):
-            chgcar2cube([str(infile)], [str(tmp_path / "out")], verbose=False, return_spin_integrals=True)
+         patch("tools4vasp.chgcar2cube.AseAtomsAdaptor.get_atoms", return_value=mock_atoms), \
+         pytest.raises(ValueError):
+        chgcar2cube([str(infile)], [str(tmp_path / "out")], verbose=False, return_spin_integrals=True)
 
 
 def test_chgcar2cube_backs_up_existing_output(tmp_path):
@@ -910,9 +911,9 @@ def test_elf2cube_raises_for_non_spinpol_spin_integral(tmp_path):
     mock_atoms = MagicMock()
 
     with patch("tools4vasp.elf2cube.Elfcar.from_file", return_value=mock_elfcar), \
-         patch("tools4vasp.elf2cube.AseAtomsAdaptor.get_atoms", return_value=mock_atoms):
-        with pytest.raises(ValueError):
-            elf2cube([str(infile)], [str(tmp_path / "out")], verbose=False, return_spin_integrals=True)
+         patch("tools4vasp.elf2cube.AseAtomsAdaptor.get_atoms", return_value=mock_atoms), \
+         pytest.raises(ValueError):
+        elf2cube([str(infile)], [str(tmp_path / "out")], verbose=False, return_spin_integrals=True)
 
 
 def test_elf2cube_verbose_spinpol_output(tmp_path, capsys):
@@ -1064,7 +1065,7 @@ _OUTCAR_FREQ = """\
 
 def test_read_frequency_from_outcar():
     """read_frequency_from_outcar() must parse 3 displacement values per atom."""
-    from tools4vasp.freq2mode import read_frequency_from_outcar, get_frequencies
+    from tools4vasp.freq2mode import get_frequencies, read_frequency_from_outcar
 
     lines = _OUTCAR_FREQ.splitlines(keepends=True)
     freqs = get_frequencies(lines)
@@ -1127,7 +1128,7 @@ def test_count_z_voxels_using_window():
     """count_z_voxels_using_window() must count atoms in z-windows."""
     from tools4vasp.split_surf_and_mol import count_z_voxels_using_window
     z_coords = [0.0, 0.0, 0.0, 5.0, 5.0, 5.0]
-    points, counts = count_z_voxels_using_window(20.0, 0.5, 1.0, z_coords)
+    _points, counts = count_z_voxels_using_window(20.0, 0.5, 1.0, z_coords)
     assert counts[0] == 3
 
 
@@ -1324,6 +1325,7 @@ def test_set_vacuum_helper_geometry():
 def test_set_vacuum_helper_other_direction():
     """direction=0 must operate on the x-axis instead of z."""
     from ase import Atoms
+
     from tools4vasp.set_vacuum import set_vacuum
     atoms = Atoms(
         symbols=["H", "H"],
@@ -1342,6 +1344,7 @@ def test_set_vacuum_rejects_non_axis_aligned_cell():
     """A tilted lattice vector along DIRECTION must raise ValueError rather
     than silently destroy the tilt."""
     from ase import Atoms
+
     from tools4vasp.set_vacuum import set_vacuum
     tilted_cell = np.array([[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.5, 0.0, 10.0]])
     atoms = Atoms(
@@ -1371,6 +1374,7 @@ def test_set_vacuum_run_overwrite_writes_backup(tmp_path):
     """run() with overwrite=True must replace the input and write a _old backup
     of the original."""
     from ase.io import read as ase_read
+
     from tools4vasp.set_vacuum import run
     poscar = tmp_path / "POSCAR"
     _make_simple_slab().write(str(poscar), format="vasp")
@@ -1396,6 +1400,7 @@ def test_set_vacuum_run_refuses_to_overwrite_existing_backup(tmp_path):
 def test_set_vacuum_main_cli(tmp_path, monkeypatch):
     """main() must parse sys.argv and process the POSCAR in the current dir."""
     from ase.io import read as ase_read
+
     from tools4vasp.set_vacuum import main
     poscar = tmp_path / "POSCAR"
     _make_simple_slab().write(str(poscar), format="vasp")
