@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Bug 1 & 2 — chgcar2cube / elf2cube: output not written when verbose=False
 # ---------------------------------------------------------------------------
@@ -103,8 +102,9 @@ def test_plotNEB_unit_slash_still_works(tmp_path, neb_data):
 
 def test_plotNEB_no_hardcoded_path():
     """The hardcoded /home/patrickm exec() call must not exist in the source."""
-    import tools4vasp.plotNEB as mod
     import inspect as _inspect
+
+    import tools4vasp.plotNEB as mod
     src = _inspect.getsource(mod)
     assert "/home/patrickm" not in src, \
         "Hardcoded developer path still present in plotNEB.py"
@@ -127,6 +127,7 @@ def test_plotNEB_delta_not_mutated_across_images(tmp_path):
     With the fix every image should have identical x-width = 2 * delta.
     """
     from unittest.mock import patch
+
     from tools4vasp.plotNEB import plot
 
     n = 4
@@ -252,7 +253,7 @@ def test_write_modecar_writes_all_lines(tmp_path):
     write_modecar(frequency, outfile)
 
     with open(outfile) as f:
-        lines = [line for line in f.readlines() if line.strip()]
+        lines = [line for line in f if line.strip()]
     assert len(lines) == len(frequency), \
         f"Expected {len(frequency)} lines, got {len(lines)}"
 
@@ -265,7 +266,8 @@ def test_write_modecar_values_correct(tmp_path):
     outfile = str(tmp_path / "MODECAR")
     write_modecar(frequency, outfile)
 
-    content = open(outfile).read()
+    with open(outfile) as f:
+        content = f.read()
     assert "1.5000000000E+00" in content
     assert "-2.5000000000E+00" in content
 
@@ -276,8 +278,9 @@ def test_write_modecar_values_correct(tmp_path):
 
 def test_get_all_xmls_parameter_name():
     """get_all_xmls must accept 'verbose' (not 'vervose') as a keyword arg."""
-    from tools4vasp.vaspGetEF import get_all_xmls
     import tempfile
+
+    from tools4vasp.vaspGetEF import get_all_xmls
 
     with tempfile.TemporaryDirectory() as d:
         # Should not raise TypeError for unexpected keyword argument
@@ -325,7 +328,7 @@ def test_get_entropy_energies_path_with_spaces_and_metachars(tmp_path):
     outcar = evil_dir / "OUTCAR"
     outcar.write_text(OUTCAR_TOTEN_BLOCK)
 
-    toten, e_wo_entropy = _get_entropy_energies(str(outcar))
+    toten, _e_wo_entropy = _get_entropy_energies(str(outcar))
     assert toten == pytest.approx(-68.41063650)
     assert not (tmp_path / "pwned").exists()
     assert not (evil_dir / "pwned").exists()
@@ -368,7 +371,7 @@ def test_get_entropy_energies_block_beyond_last_200_lines(tmp_path):
     from tools4vasp.vaspcheck import _get_entropy_energies
 
     outcar = tmp_path / "OUTCAR"
-    trailing = "\n".join("  some other OUTCAR output line {}".format(i)
+    trailing = "\n".join(f"  some other OUTCAR output line {i}"
                          for i in range(300))
     outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n" + trailing + "\n")
 
@@ -399,7 +402,7 @@ def test_get_entropy_energies_across_chunk_boundaries(tmp_path):
     from tools4vasp.vaspcheck import _get_entropy_energies
 
     outcar = tmp_path / "OUTCAR"
-    filler = "\n".join("  some other OUTCAR output line {}".format(i)
+    filler = "\n".join(f"  some other OUTCAR output line {i}"
                        for i in range(50))
     outcar.write_text(OUTCAR_TOTEN_BLOCK + "\n"
                       + OUTCAR_TOTEN_BLOCK_FINAL + "\n" + filler + "\n")
@@ -463,8 +466,8 @@ def test_get_entropy_energies_reads_only_file_tail(tmp_path):
 
 def test_iter_lines_reversed_rejects_nonpositive_chunk_size(tmp_path):
     """chunk_size <= 0 must raise instead of looping forever."""
-    from tools4vasp.vaspcheck import _get_entropy_energies
     from tools4vasp._fileutils import iter_lines_reversed
+    from tools4vasp.vaspcheck import _get_entropy_energies
 
     outcar = tmp_path / "OUTCAR"
     outcar.write_text(OUTCAR_TOTEN_BLOCK)
@@ -472,9 +475,8 @@ def test_iter_lines_reversed_rejects_nonpositive_chunk_size(tmp_path):
     for bad_chunk_size in (0, -1):
         with pytest.raises(ValueError, match="chunk_size"):
             _get_entropy_energies(str(outcar), chunk_size=bad_chunk_size)
-        with open(outcar, "rb") as f:
-            with pytest.raises(ValueError, match="chunk_size"):
-                list(iter_lines_reversed(f, chunk_size=bad_chunk_size))
+        with open(outcar, "rb") as f, pytest.raises(ValueError, match="chunk_size"):
+            list(iter_lines_reversed(f, chunk_size=bad_chunk_size))
 
 
 def test_get_entropy_energies_missing_block_raises(tmp_path):
@@ -498,18 +500,18 @@ def test_plotNEB_dispersion_read_without_shell(tmp_path, monkeypatch):
     spline_lines = []
     for i in range(10):
         x = i / 9.0
-        spline_lines.append("{} {} {} {}".format(i, x, 0.0, 0.0))
+        spline_lines.append(f"{i} {x} {0.0} {0.0}")
     (tmp_path / "spline.dat").write_text("\n".join(spline_lines) + "\n")
     neb_lines = []
     for i in range(n_img):
-        neb_lines.append("{} {} {} {}".format(i, i / 2.0, 0.1 * i, 0.0))
+        neb_lines.append(f"{i} {i / 2.0} {0.1 * i} {0.0}")
     (tmp_path / "neb.dat").write_text("\n".join(neb_lines) + "\n")
     for i in range(n_img):
-        d = tmp_path / "{:02d}".format(i)
+        d = tmp_path / f"{i:02d}"
         d.mkdir()
         (d / "OUTCAR").write_text(
             "  Edisp (eV) =   -0.10000\n"
-            "  Edisp (eV) =   -{:.5f}\n".format(0.2 + 0.1 * i)
+            f"  Edisp (eV) =   -{0.2 + 0.1 * i:.5f}\n"
         )
 
     plotNEB.run(filename=str(tmp_path / "NEB.png"), plot_dispersion=True)
@@ -524,6 +526,7 @@ def test_plotNEB_module_does_not_use_subprocess():
     don't trip the test — only real imports or shell=... call keywords do.
     """
     import ast
+
     import tools4vasp.plotNEB as mod
 
     tree = ast.parse(inspect.getsource(mod))

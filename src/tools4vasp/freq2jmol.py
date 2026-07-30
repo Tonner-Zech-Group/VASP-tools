@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+
 from ase.calculators.vasp import Vasp
+
 # needs os.environ["VASP_PP_PATH"] to point to potcar files
 
 
@@ -22,10 +24,10 @@ def main():
     energies = vibs.get_energies()
     nVibs = len(energies)
     for i in range(nVibs):
-        with open("vib-{:03d}.xyz".format(i + 1), "w") as f:
+        with open(f"vib-{i + 1:03d}.xyz", "w") as f:
             for frame in vibs.iter_animated_mode(i):
                 frame.write(f, format="extxyz")
-        print("Frequency #{:03d}: {:10.6f} cm-1".format(i + 1, energies[i]))
+        print(f"Frequency #{i + 1:03d}: {energies[i]:10.6f} cm-1")
 
 
 if __name__ == "__main__":

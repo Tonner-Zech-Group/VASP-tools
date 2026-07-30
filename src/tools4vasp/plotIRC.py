@@ -2,12 +2,15 @@
 import argparse
 import os
 import re
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import numpy as np
+import sys
+
 import ase
 import ase.io
-from ase.units import _Nav as Nav, _e as e
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+from ase.units import _e as e
+from ase.units import _Nav as Nav
 
 ev_to_kjMol = (Nav * e)/1000
 
@@ -23,15 +26,15 @@ def read_sp(directory, allow_freq):
     if os.path.isfile(path):
         file = ase.io.read(path, index=":")
         # Check if the file is a single point calculation:
-        if not (len(file) == 1) and not allow_freq:
+        if len(file) != 1 and not allow_freq:
             print("Supplied transition state is not a single point calculation")
-            exit(1)
+            sys.exit(1)
         energy = file[0].calc.results["energy"]
         energy *= ev_to_kjMol
         positions = file[0].positions
     else:
         print("vasprun.xml file not found")
-        exit(1)
+        sys.exit(1)
     return positions, energy
 
 
@@ -73,7 +76,7 @@ def generate_plot(irc_e, irc_p, ts, offset=None):
     # check if the positions of the tree structures are compatible
     if not (ts[0].shape == irc_p[0].shape and ts[0].shape == irc_e[0].shape):
         print("Geometries of the calculations are not matching. Please ensure that the atoms are numbered correctly.")
-        exit(1)
+        sys.exit(1)
     # calculate the offset of the directions from the transition state
     reactant_offset = calc_rms(ts[0], irc_e[0])
     product_offset = calc_rms(ts[0], irc_p[0])

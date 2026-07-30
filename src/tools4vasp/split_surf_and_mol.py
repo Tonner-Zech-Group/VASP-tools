@@ -4,12 +4,13 @@
 # by Jakob Schramm
 # 2026/04/09
 #
+import matplotlib.pyplot as plt
+import numpy as np
 from ase import Atoms
+from ase.constraints import FixAtoms
 from ase.io import read
 from ase.visualize import view
-from ase.constraints import FixAtoms
-import numpy as np
-import matplotlib.pyplot as plt
+
 
 def count_z_voxels_using_window(z_cell,step,window,z_coords):
     # Function that screens z_coordinates and counts occurrences using a sliding window
@@ -53,10 +54,10 @@ def get_no_atoms_in_layer(plat_height, no_atoms):
     best_value = 0
     best_count = -1
     for value, count in occurence.items():
-        if value >= max(9,no_atoms/20): ### to only count layers with at least 9 atoms or one twentieth of all atoms - arbitrary values that yielded good results in tests
-            if count > best_count or (count == best_count and value > best_value):
-                best_value = value
-                best_count = count
+        ### to only count layers with at least 9 atoms or one twentieth of all atoms - arbitrary values that yielded good results in tests
+        if value >= max(9,no_atoms/20) and (count > best_count or (count == best_count and value > best_value)):
+            best_value = value
+            best_count = count
     return best_value
 
 def get_layers(points,window,step,plateaus,plat_height,no_atoms_in_layer):
@@ -77,13 +78,7 @@ def separate_surf_and_mol(symbol, initial_mol, layers, surf, mol):
     for atom in initial_mol:
         if atom.symbol == symbol:
             is_frozen = any(isinstance(c, FixAtoms) and atom.index in c.index for c in initial_mol.constraints)
-            if len(layers) > 0 and max(layers) <= 0.5 and atom.position[2] <= max(layers): ### to include non-empty layers that are on the bottom (< 0.5 Å) of the slab like hydrogen saturation layers
-                atom.tag = atom.index
-                surf += atom
-                if is_frozen:
-                    new_index = len(surf) - 1
-                    surf.constraints.append(FixAtoms(indices=[new_index]))
-            elif len(layers) > 1 and atom.position[2] <= max(layers): ### to not include single layers like flat-laying polycyclic hydrocarbons 
+            if len(layers) > 0 and max(layers) <= 0.5 and atom.position[2] <= max(layers) or len(layers) > 1 and atom.position[2] <= max(layers): ### to include non-empty layers that are on the bottom (< 0.5 Å) of the slab like hydrogen saturation layers
                 atom.tag = atom.index
                 surf += atom
                 if is_frozen:

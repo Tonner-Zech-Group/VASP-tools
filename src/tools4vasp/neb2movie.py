@@ -4,9 +4,11 @@
 # by Patrick Melix
 #
 # You can import the module and then call .main() or use it as a script
-from ase import io
-import os
 import glob
+import os
+
+from ase import io
+
 
 def run(outFile='movie.xyz', workdir='.', wrap=False, use=None):
     """
@@ -16,7 +18,7 @@ def run(outFile='movie.xyz', workdir='.', wrap=False, use=None):
 
     #if output exists mv to .bak
     if os.path.isfile(outFile):
-        print('ATTENTION: {:} exists, moving to *.bak'.format(outFile))
+        print(f'ATTENTION: {outFile} exists, moving to *.bak')
         os.rename(outFile, outFile+'.bak')
 
     if use:
@@ -28,11 +30,11 @@ def run(outFile='movie.xyz', workdir='.', wrap=False, use=None):
             filename = 'POSCAR'
         else:
             raise RuntimeError("Could neither find CONTCAR nor POSCAR in {:}".format(os.path.join(workdir,'01')))
-        print("Using {:} files.".format(filename))
+        print(f"Using {filename} files.")
     mol = []
     dirs = glob.glob(os.path.join(workdir,'[0-9][0-9]'))
     dirs.sort()
-    print("Found {:} NEB subdirs.".format(len(dirs)))
+    print(f"Found {len(dirs)} NEB subdirs.")
     print("Loading images ", end='')
     for i,image in enumerate(dirs):
         if (i == 0) or (i == len(dirs)-1):
@@ -40,17 +42,16 @@ def run(outFile='movie.xyz', workdir='.', wrap=False, use=None):
         else:
             imagePath = os.path.join(image,filename)
         if not os.path.isfile(imagePath):
-            raise RuntimeError('File {:} does not exist'.format(str(imagePath)))
+            raise RuntimeError(f'File {imagePath!s} does not exist')
 
-        print(" {:}".format(os.path.split(image)[-1]), end='')
+        print(f" {os.path.split(image)[-1]}", end='')
         mol.append(io.read(imagePath, format='vasp'))
 
-    print("")
+    print()
     for frame in mol:
         if wrap:
             frame.wrap(center=(0.0,0.0,0.0))
         frame.write(outFile,append=True)
-    return
 
 
 

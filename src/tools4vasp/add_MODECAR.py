@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-from ase import io
+
 import numpy as np
+from ase import io
 
 
 def main():

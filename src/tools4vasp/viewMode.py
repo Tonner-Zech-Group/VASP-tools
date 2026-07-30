@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import ase.io
+
 import ase
+import ase.io
 import numpy as np
 from ase.visualize import view
 

@@ -2,6 +2,7 @@
 Shared pytest configuration and fixtures for tools4vasp tests.
 """
 import os
+
 import pytest
 
 # Force non-interactive matplotlib backend for all tests
