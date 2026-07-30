@@ -151,8 +151,11 @@ def _get_entropy_energies(outcar, chunk_size=64 * 1024) -> tuple:
 
 
 def check_vasp_electronic_entropy(path, calc, limit=0.001) -> str | None:
-    """Check if the electronic entropy is larger than limit.
-    
+    """Check if the electronic entropy per atom exceeds limit in magnitude.
+
+    Only runs the entropy test when check_vasp_occupations() has already found
+    non-integer occupations, since integer occupations imply a vanishing T*S.
+
     Input Parameters
     ----------------
     path : str
@@ -162,7 +165,7 @@ def check_vasp_electronic_entropy(path, calc, limit=0.001) -> str | None:
         Vasp calculator object
 
     limit : float
-        Limit for the electronic entropy in eV/atom
+        Limit for the magnitude of the electronic entropy in eV/atom
 
     Returns
     -------
@@ -174,10 +177,17 @@ def check_vasp_electronic_entropy(path, calc, limit=0.001) -> str | None:
         print(f"Integer occupation check returned: {ret}")
         outcar = os.path.join(path, "OUTCAR")
         toten, e_wo_entropy = _get_entropy_energies(outcar)
-        entropy = toten - e_wo_entropy
+        # VASP prints TOTEN = F = E - TS and "energy without entropy" = E, so the
+        # entropy term is e_wo_entropy - toten. Subtracting the other way round
+        # gives -TS, which for Gaussian/Fermi smearing (ISMEAR <= 0, where TS >= 0)
+        # is always <= 0 and therefore always below a positive limit -- the check
+        # could never fire. Compare the MAGNITUDE, because with Methfessel-Paxton
+        # smearing (ISMEAR > 0) the entropy term is legitimately negative and a
+        # large negative value is just as much a problem as a large positive one.
+        entropy = e_wo_entropy - toten
         mol = io.read(os.path.join(path, 'CONTCAR'))
         entropy_per_atom = entropy / len(mol)
-        if not entropy_per_atom < limit:
+        if not abs(entropy_per_atom) < limit:
             return f"Entropy per atom is {entropy_per_atom}eV"
     return
         

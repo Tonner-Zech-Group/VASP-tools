@@ -114,6 +114,75 @@ def test_check_vasp_electronic_entropy_good_occupations():
     assert result is None
 
 
+# --- electronic entropy: sign convention and threshold -----------------------
+# VASP writes TOTEN = F = E - T*S and "energy without entropy" = E, so the entropy
+# term is (e_wo_entropy - toten). Computing it the other way round yields -T*S,
+# which is <= 0 for Gaussian/Fermi smearing and therefore always below a positive
+# limit, so the check could never fire. These tests pin the sign down.
+
+def _write_entropy_case(tmp_path, toten, e_wo_entropy, natoms=2):
+    """Write an OUTCAR/CONTCAR pair with a prescribed T*S and atom count."""
+    (tmp_path / "OUTCAR").write_text(
+        "  FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)\n"
+        "  ---------------------------------------------------\n"
+        f"  free  energy   TOTEN  =    {toten:.8f} eV\n"
+        "\n"
+        f"  energy  without entropy=   {e_wo_entropy:.8f}  "
+        f"energy(sigma->0) =   {toten:.8f}\n")
+    from ase import Atoms
+    from ase.io import write
+    write(str(tmp_path / "CONTCAR"),
+          Atoms("H" * natoms, positions=[(i, 0, 0) for i in range(natoms)],
+                cell=[10, 10, 10], pbc=True), format="vasp")
+
+
+def test_electronic_entropy_flags_large_positive_entropy(tmp_path):
+    """A T*S well above the limit must be reported, not silently accepted.
+
+    Regression test: with the sign reversed this returned None, so an
+    arbitrarily large entropy passed the check unnoticed.
+    """
+    from tools4vasp.vaspcheck import check_vasp_electronic_entropy
+    # T*S = E - F = 0.500 eV over 2 atoms = 0.25 eV/atom, far above the 1 meV limit
+    _write_entropy_case(tmp_path, toten=-68.900, e_wo_entropy=-68.400, natoms=2)
+    result = check_vasp_electronic_entropy(
+        str(tmp_path), _make_mock_calc(occ_val=1.5))
+    assert result is not None
+    assert "Entropy per atom" in result
+    # reported value must be the POSITIVE T*S per atom, not its negative
+    assert "0.25" in result
+
+
+def test_electronic_entropy_accepts_small_entropy(tmp_path):
+    """A negligible T*S must pass even though occupations are fractional."""
+    from tools4vasp.vaspcheck import check_vasp_electronic_entropy
+    # T*S = 0.0004 eV over 2 atoms = 0.2 meV/atom, below the 1 meV limit
+    _write_entropy_case(tmp_path, toten=-68.4004, e_wo_entropy=-68.4000, natoms=2)
+    assert check_vasp_electronic_entropy(
+        str(tmp_path), _make_mock_calc(occ_val=1.5)) is None
+
+
+def test_electronic_entropy_flags_large_negative_entropy(tmp_path):
+    """Methfessel-Paxton (ISMEAR > 0) gives a negative T*S; magnitude must count."""
+    from tools4vasp.vaspcheck import check_vasp_electronic_entropy
+    # T*S = -0.500 eV over 2 atoms; large in magnitude, so it must be reported
+    _write_entropy_case(tmp_path, toten=-68.400, e_wo_entropy=-68.900, natoms=2)
+    result = check_vasp_electronic_entropy(
+        str(tmp_path), _make_mock_calc(occ_val=1.5))
+    assert result is not None
+    assert "Entropy per atom" in result
+
+
+def test_electronic_entropy_respects_custom_limit(tmp_path):
+    """The limit argument must be honoured in both directions."""
+    from tools4vasp.vaspcheck import check_vasp_electronic_entropy
+    # T*S = 0.020 eV over 2 atoms = 10 meV/atom
+    _write_entropy_case(tmp_path, toten=-68.420, e_wo_entropy=-68.400, natoms=2)
+    calc = _make_mock_calc(occ_val=1.5)
+    assert check_vasp_electronic_entropy(str(tmp_path), calc, limit=0.100) is None
+    assert check_vasp_electronic_entropy(str(tmp_path), calc, limit=0.001) is not None
+
+
 def test_vaspcheck_main_runs(tmp_path):
     """main() must complete without exception when calc reports no problems."""
     from tools4vasp import vaspcheck
