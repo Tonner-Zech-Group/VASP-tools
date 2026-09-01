@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0] - 2026-09-01
+
+### New Tools
+
+- **`vasplint`** — Check a VASP input directory *before* it is submitted, the pre-run counterpart to `vaspcheck`. Validates POSCAR/POTCAR species-block alignment (symlinks resolved, both VASP 4 and VASP 5 POSCARs), pseudopotential provenance, selective-dynamics blocks in fixed-geometry runs, transition-state tags left in an ordinary INCAR, `IBRION`/`NSW`/`INTERACTIVE`/`ISIF` consistency per run type, the interactive-mode structure count against `NSW`, `ICHARG` against a missing CHGCAR, k-mesh against a template, `KPAR` against the mesh size, `NCORE * KPAR` against the requested rank count, required `#SBATCH` directives (site rules opt-in via `--site`), continuation runs whose source is still writing its CONTCAR, and that every symlink is relative and resolves. Any check whose input is missing reports itself as skipped instead of passing quietly. `--json` for scripting, `--strict` to fail on warnings.
+
+### New Modules
+
+- **`tools4vasp.vaspsetup`** — Importable machinery for building VASP input directories: order-preserving `write_poscar` (never merges repeated species blocks), POTCAR assembly from a pseudopotential library (delegating to `getPOTCAR.sh`, so the recommended-extension table is not duplicated) or from an existing reference POTCAR, relative POTCAR symlinks to one shared file per batch, INCAR rendering with declared overrides and a self-describing provenance comment, refusal of NEB/dimer templates for ordinary runs, interactive-mode stdin files, job-script patching with required-directive assertions, and `continuation_dir()` for restarts whose POSCAR is a relative symlink to the previous CONTCAR (refusing sources that are still running, warning on unconverged ones).
+
+### Other
+
+- **`skills/vasp/`** — An agent skill shipped with the repository, plus a commented group-default INCAR and a generic job-script template. Values that are per-system decisions are marked as such rather than presented as defaults.
+
 ## [1.3.1] - 2026-06-11
 
 ### Bug Fixes
