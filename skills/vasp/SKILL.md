@@ -114,7 +114,7 @@ to run; for a finished calculation use `vaspcheck` and `vaspcheck-outcar`.
 
 ## Templates
 
-`templates/INCAR` next to this file is the group default, in ordinary INCAR
+`templates/INCAR.template` next to this file is the group default, in ordinary INCAR
 syntax: a single point, with the transition-state and hybrid blocks commented
 out. Values marked **PER SYSTEM** in its comments are decisions, not defaults to
 inherit silently: cutoff, dispersion, spin, smearing and the parallel layout all

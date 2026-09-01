@@ -407,8 +407,9 @@ def test_kmesh_differing_from_the_template_is_an_error(tmp_path):
 
 
 def test_dipole_tag_only_on_one_side_warns(tmp_path):
+    """Compared against INCAR.template, not against a file called "INCAR"."""
     templates = _template_dir(tmp_path)
-    (templates / "INCAR").write_text(INCAR_SINGLE_POINT)
+    assert not (templates / "INCAR").exists()
     d = _run_dir(tmp_path)
     render_incar(templates / "INCAR.template", d / "INCAR",
                  overrides={"LDIPOL": ".TRUE."})

@@ -356,15 +356,18 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                         "template", "error",
                         f"{len(undeclared)} tag(s) differ from the template without "
                         f"being declared as overrides: {detail}"))
-        for tag in _DIPOLE_TAGS:
-            tmpl_tags = parse_incar(template_dir / "INCAR") if (template_dir / "INCAR").exists() else {}
-            if tmpl_tags and (tag in tags) != (tag in tmpl_tags):
-                where = "INCAR" if tag in tags else "template"
-                findings.append(_finding(
-                    "dipole", "warning",
-                    f"{tag} is set in the {where} only; a dipole correction changes "
-                    "the energy zero, so mixing corrected and uncorrected runs in one "
-                    "comparison is not valid"))
+                # Compared against the template the INCAR actually names, not
+                # against a file assumed to be called "INCAR": templates are
+                # conventionally "INCAR.template", and hardcoding the name made
+                # this check silently do nothing.
+                for tag in _DIPOLE_TAGS:
+                    if (tag in tags) != (tag in tmpl_tags):
+                        where = "INCAR" if tag in tags else "template"
+                        findings.append(_finding(
+                            "dipole", "warning",
+                            f"{tag} is set in the {where} only; a dipole correction "
+                            "changes the energy zero, so mixing corrected and "
+                            "uncorrected runs in one comparison is not valid"))
     elif tags:
         skipped.append("template: no --template given, INCAR not compared to one")
 
