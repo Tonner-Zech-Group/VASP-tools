@@ -1,0 +1,36 @@
+#!/bin/bash
+# Generic VASP job script template for tools4vasp.vaspsetup.patch_runscript().
+# The three directives tools4vasp requires everywhere are active below; the
+# per-machine blocks are commented out. Uncomment exactly one of them.
+#SBATCH --job-name=vasp-run
+#SBATCH --output=slurm-vasp-run-%j.out #descriptive name + job id; stderr merges in, as with SLURM's default
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=CHANGE-ME@example.org
+#SBATCH -t 02:00:00
+#SBATCH --nodes=1
+#SBATCH --exclusive
+#SBATCH --signal=B:12@600 #signal 12 to the batch script 10 min before the kill
+
+##ZIH (TU Dresden) -- Barnard, Capella
+##SBATCH -A CHANGE-ME #project
+##SBATCH -p barnard #barnard, capella
+##SBATCH --licenses=horse #FILESYSTEM INTERLOCK: /data/horse=horse, /data/walrus=walrus, Capella=cat. Without it the job can start while the file system is in maintenance and lose the whole walltime
+##SBATCH --ntasks-per-node=48 #must satisfy NCORE * KPAR | (nodes * ntasks-per-node)
+##SBATCH --mem=0 #all the memory on an exclusive node
+
+##PC2 Noctua2
+##SBATCH -A CHANGE-ME
+##SBATCH -p normal #normal, largemem, hugemem, gpu
+##SBATCH --ntasks-per-node=128
+##SBATCH --mem=0
+
+module purge
+# module load <your VASP module>
+
+STDIN=""   #interactive mode (IBRION=11) reads structures 2..N from this file
+
+if [ -n "${STDIN}" ]; then
+    srun vasp_std < "${STDIN}"
+else
+    srun vasp_std
+fi

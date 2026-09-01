@@ -1,0 +1,80 @@
+# Group default INCAR (tools4vasp). Single point / relaxation.
+# Copy this, override what your system needs, and let tools4vasp.vaspsetup
+# record which tags you changed. Everything marked PER SYSTEM is a decision you
+# must make and be able to defend, not a value to inherit silently.
+
+#Restarting
+ISTART = 1 # read the WAVECAR if there is one: 0=no, 1=yes, 2=reuse orbitals but not ENCUT
+#ICHARG = 1 # read CHGCAR. Leave commented unless a CHGCAR is actually present -- ICHARG=1 without one fails at startup
+
+#Precision
+ENCUT = 400 # PER SYSTEM. Plane-wave cutoff in eV. A common starting point is 1.3 * max(ENMAX) over your POTCARs; converge it and keep it fixed across every calculation you intend to compare
+PREC = Accurate
+EDIFF = 1.00e-06 # SCF convergence in eV. 1e-06 for energies and forces you will compare; 1e-04 is too loose for anything but a first look
+EDIFFG = -1.0e-02 # relaxation stops when all force norms are below abs(x) in eV/A. Negative = force criterion. Inert for NSW=0
+LREAL = Auto # real-space projection; Auto above ~30 atoms, .FALSE. below, never .TRUE.
+ISYM = 0 # symmetry off. Safer for adsorbates and defects, and required if you feed structures that break the symmetry of the first one
+ISPIN = 1 # 1 = spin restricted, 2 = unrestricted. PER SYSTEM: anything with unpaired electrons needs 2
+SYMPREC = 1.00e-08
+
+#Dispersion correction -- PER SYSTEM, and it must match whatever you compare against
+#IVDW = 12 # 0=none, 11=D3(zero), 12=D3(BJ), 13=D4. Mixing corrected and uncorrected energies in one comparison is invalid
+
+#General DFT setup
+GGA = PE # PBE
+#LHFCALC = .TRUE. # hybrid
+#HFSCREEN = 0.2 # 0.2 = HSE06
+#AEXX = 0.25 ; AGGAX = 0.75 ; AGGAC = 1.0 ; ALDAC = 1.0 # HSE06 defaults, spelled out
+
+#SCF convergence
+ALGO = Fast # Normal = blocked Davidson (slow, robust); VeryFast = RMM-DIIS; Fast = Davidson then RMM-DIIS; All = good for insulators
+NELM = 150 # max SCF steps
+NELMIN = 5 # min SCF steps
+NELMDL = -15 # non-selfconsistent steps at the start; negative = only in the first ionic step
+ISMEAR = 0 # PER SYSTEM. 0 = Gaussian (molecules, semiconductors, insulators); 1/2 = Methfessel-Paxton (metals); -5 = tetrahedron (accurate DOS, needs a Gamma-centred mesh, do not relax with it)
+SIGMA = 0.05 # smearing width in eV; metals need more, and the entropy term T*S should stay small (vaspcheck checks it)
+
+#Parallelisation -- PER SYSTEM, set from your node layout
+NCORE = 24 # cores working on one band. NCORE * KPAR must divide the total rank count. Use 1 on GPUs
+KPAR = 2 # k-points treated at once; must not exceed the number of k-points in your mesh
+LPLANE = .TRUE.
+NSIM = 1 # 1 for CPU, 4 for GPU
+LSCALU = .FALSE.
+
+#Ionic steps -- this default is a SINGLE POINT
+IBRION = -1 # -1 = single point, 1 = RMM-DIIS, 2 = conjugate gradient, 3 = damped MD / VTST optimisers, 0 = MD, 11 = INTERACTIVE
+NSW = 0 # number of ionic steps. In INTERACTIVE mode this must be at least (structures on stdin) + 1
+ISIF = 2 # 0/1/2 = positions only, 3 = positions + cell shape + volume. INTERACTIVE mode requires < 3
+POTIM = 0.02 # step scaling for relaxation, timestep for MD
+ADDGRID = .TRUE. # finer grid for augmentation charges; reduces force noise
+
+#Mixing -- leave at the VASP defaults unless you are chasing an SCF problem
+#AMIX = 0.2
+#BMIX = 0.0001
+#MAXMIX = 30 # negative = reset the mixer after each ionic step
+
+#Output
+LWAVE = .FALSE. # writing a multi-GB WAVECAR per run is rarely worth it; set .TRUE. only if you will restart from it
+LCHARG = .FALSE. # same for CHGCAR; required .TRUE. if a later run sets ICHARG=1
+LAECHG = .FALSE. # all-electron density, for Bader analysis
+LMAXMIX = 4 # 4 for d elements, 6 for f
+#LORBIT = 11 # write DOSCAR and site-projected weights. 14 includes phases but needs VASP 6
+
+#VTST -- transition-state search. Leave ALL of this commented for an ordinary run:
+#tools4vasp refuses a template carrying these tags for a single point, because
+#VASP+VTST would silently run a band or dimer search instead.
+##NEB
+#ICHAIN = 0 # 0 = NEB, 2 = dimer
+#IMAGES = 5 # images between the fixed endpoints
+#SPRING = -5.0 # spring constant in eV/A^2, negative = nudging
+#LCLIMB = .TRUE.
+#LNEBCELL = .FALSE.
+##DIMER
+#DdR = 5E-3 # dimer separation
+#DRotMax = 4 # max rotations per step
+#DFNMax = 1.0 # rotational force above which the dimer is not rotated
+#DFNMin = 0.01
+##Optimisers
+#IOPT = 1 # 0 = VASP optimisers, 1 = LBFGS, 2 = CG, 3 = quick-min, 7 = FIRE
+#MAXMOVE = 0.2 ; ILBFGSMEM = 20 ; LGLOBAL = .TRUE. ; LAUTOSCALE = .TRUE. ; INVCURV = 0.01
+#LLINEOPT = .FALSE. ; FDSTEP = 5E-3
