@@ -1,4 +1,4 @@
-# Group default INCAR (tools4vasp). Single point / relaxation.
+# Group default INCAR template (tools4vasp). Single point / relaxation.
 # Copy this, override what your system needs, and let tools4vasp.vaspsetup
 # record which tags you changed. Everything marked PER SYSTEM is a decision you
 # must make and be able to defend, not a value to inherit silently.
