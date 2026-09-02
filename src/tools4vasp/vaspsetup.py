@@ -116,7 +116,7 @@ _PROVENANCE_RE = re.compile(
 #: ``# TAG = new (was old): reason``
 _REASON_RE = re.compile(
     r"^#\s*(?P<tag>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.*?)\s*"
-    r"\((?:was\s+(?P<old>[^)]*)|unchanged)\):\s*(?P<reason>.+?)\s*$"
+    r"\(was\s+(?P<old>[^)]*)\):\s*(?P<reason>.+?)\s*$"
 )
 #: extension -> getPOTCAR.sh flag. ``None`` means "recommended defaults".
 _PP_FLAG = {
@@ -387,13 +387,15 @@ def render_incar(template, out_path, overrides=None, run_type=None,
     is appended bare.
 
     The result is headed by a summary line naming the template, its fingerprint
-    and every changed tag, followed by one line per change giving its reason:
+    and every tag this render actually changed, followed by one line per change
+    giving its reason. An override whose value already matches the template
+    changed nothing and is therefore not listed:
 
     .. code-block:: none
 
         # tools4vasp: template=INCAR.template sha256=483da4794b03 overrides=IBRION,NSW
         # IBRION = 11 (was -1): interactive mode walks the series in one process
-        # NSW = 11 (unchanged): must be at least the number of structures
+        # NSW = 11 (was 0): must be at least the number of structures
 
     If ``run_type`` is given the *result* is validated with
     :func:`check_run_type` and nothing is written when it does not fit. In
@@ -411,7 +413,7 @@ def render_incar(template, out_path, overrides=None, run_type=None,
     lines = template.read_text(errors="replace").splitlines()
     lines = [ln for ln in lines
              if not _PROVENANCE_RE.match(ln) and not _REASON_RE.match(ln)]
-    changes, previous = [], {}
+    changes, previous, changed = [], {}, set()
 
     for i, line in enumerate(lines):
         code, comment = _split_code_comment(line)
@@ -428,6 +430,7 @@ def render_incar(template, out_path, overrides=None, run_type=None,
                 trailing = segment[len(segment.rstrip()):]
                 segments[j] = f"{indent}{tag} = {new}{trailing}"
                 changes.append(f"{tag}: {old} -> {new}")
+                changed.add(tag)
                 touched = True
         if touched:
             # `comment` still carries its own leading whitespace, so the
@@ -439,6 +442,7 @@ def render_incar(template, out_path, overrides=None, run_type=None,
             previous[tag] = "absent"
             lines.append(f"{tag} = {value}")
             changes.append(f"{tag}: (absent) -> {value}")
+            changed.add(tag)
 
     result = "\n".join(lines) + "\n"
     if run_type is not None:
@@ -450,18 +454,19 @@ def render_incar(template, out_path, overrides=None, run_type=None,
                 + "\nSupply a matching template (or comment the tags out); they "
                   "are deliberately NOT stripped automatically.")
 
+    # Only tags this render actually changed are listed. An override that
+    # matches the template changed nothing, so it is not a change to record:
+    # saying so would fill the header with lines about values that are simply
+    # the template's own. A reason is still required for every override, since
+    # the caller cannot know in advance which ones will bite.
     header = [(
         f"{PROVENANCE_PREFIX} template={template.name} "
         f"sha256={template_fingerprint(template)} "
-        f"overrides={','.join(sorted(overrides)) if overrides else '-'}"
+        f"overrides={','.join(sorted(changed)) if changed else '-'}"
     )]
-    for tag in sorted(overrides):
+    for tag in sorted(changed):
         value, reason = overrides[tag]
-        # "unchanged" rather than "(was 11)" when the template already had the
-        # value: a declared override is a statement of intent, and saying it
-        # changed nothing is more useful than repeating the number.
-        was = "unchanged" if previous[tag] == value else f"was {previous[tag]}"
-        header.append(f"# {tag} = {value} ({was}): {reason}")
+        header.append(f"# {tag} = {value} (was {previous[tag]}): {reason}")
     if extra_comment:
         header.append(f"# {extra_comment}")
     Path(out_path).write_text("\n".join(header) + "\n" + result)

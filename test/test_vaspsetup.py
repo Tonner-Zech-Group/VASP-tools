@@ -308,15 +308,17 @@ def test_normalise_overrides_rejects_a_malformed_pair():
         normalise_overrides({"NSW": ("11", "why", "extra")})
 
 
-def test_render_incar_records_an_override_that_changes_nothing(template, tmp_path):
-    """A declared override is a statement of intent, not a diff."""
+def test_an_override_matching_the_template_is_not_a_change(template, tmp_path):
+    """The header lists changes; a no-op override would just be noise."""
     out = tmp_path / "INCAR"
     changes = render_incar(template, out,
                            overrides={"ENCUT": ("400", "matches the template")})
     assert changes == []
-    assert "# ENCUT = 400 (unchanged): matches the template" in out.read_text()
-    assert incar_provenance(out)["overrides"] == ["ENCUT"]
-    assert incar_provenance(out)["reasons"]["ENCUT"] == "matches the template"
+    text = out.read_text()
+    assert "overrides=-" in text.splitlines()[0]
+    assert "matches the template" not in text
+    assert incar_provenance(out)["overrides"] == []
+    assert len(text.splitlines()) == len(template.read_text().splitlines()) + 1
 
 
 def test_incar_provenance_absent_returns_none(tmp_path):
