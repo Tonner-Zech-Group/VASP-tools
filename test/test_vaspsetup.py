@@ -27,6 +27,7 @@ from tools4vasp.vaspsetup import (
     parse_incar,
     patch_runscript,
     poscar_blocks,
+    potcar_enmax,
     read_poscar_blocks,
     read_titels,
     rel_symlink,
@@ -724,3 +725,67 @@ def test_expected_titels_disambiguates_an_ambiguous_element(tmp_path):
     build_potcar_from_reference([("Ti", 1)], reference, out,
                                 expected_titels={"Ti": TITEL_TISV})
     assert read_titels(out) == [TITEL_TISV]
+
+
+# ---------------------------------------------------------------------------
+# fixtures the council named as systematically absent (2026-09-02)
+# ---------------------------------------------------------------------------
+
+def test_potcar_enmax_pairs_every_dataset(tmp_path):
+    path = tmp_path / "POTCAR"
+    path.write_text(
+        " PAW_PBE Si 05Jan2001\n   ENMAX  =  245.345; ENMIN  =  184.009 eV\n"
+        "   TITEL  = PAW_PBE Si 05Jan2001\nEnd of Dataset\n"
+        " PAW_PBE O 08Apr2002\n   ENMAX  =  400.000; ENMIN  =  300.000 eV\n"
+        "   TITEL  = PAW_PBE O 08Apr2002\nEnd of Dataset\n")
+    assert potcar_enmax(path) == [("PAW_PBE Si 05Jan2001", 245.345),
+                                  ("PAW_PBE O 08Apr2002", 400.0)]
+
+
+def test_potcar_enmax_refuses_unpairable_counts(tmp_path):
+    path = tmp_path / "POTCAR"
+    path.write_text("   TITEL  = PAW_PBE Si 05Jan2001\n   TITEL  = PAW_PBE O 08Apr2002\n"
+                    "   ENMAX  =  245.345; ENMIN = 1.0 eV\n")
+    with pytest.raises(VaspSetupError, match="cannot be paired"):
+        potcar_enmax(path)
+
+
+def test_selective_dynamics_survives_a_round_trip(tmp_path):
+    """Constraints must be readable back when they were deliberately kept."""
+    from ase.constraints import FixAtoms
+    atoms = _atoms(["Si", "Si", "H", "O", "C", "H"])
+    atoms.set_constraint(FixAtoms(indices=[0, 1]))
+    path = write_poscar(atoms, tmp_path / "POSCAR", keep_constraints=True)
+    blocks, selective = read_poscar_blocks(path)
+    assert selective is True
+    assert blocks == [("Si", 2), ("H", 1), ("O", 1), ("C", 1), ("H", 1)]
+    text = path.read_text()
+    assert "Selective dynamics" in text
+    assert text.count("F   F   F") == 2          # the two fixed atoms only
+
+
+def test_a_contcar_with_a_velocity_block_still_parses(tmp_path):
+    """An MD restart CONTCAR carries velocities after the coordinates."""
+    path = tmp_path / "CONTCAR"
+    path.write_text(
+        "Si H\n1.0\n10 0 0\n0 10 0\n0 0 10\nSi H\n1 1\nDirect\n"
+        "0.0 0.0 0.0\n0.1 0.0 0.0\n\n"
+        "  0.00000000E+00  0.00000000E+00  0.00000000E+00\n"
+        "  0.12000000E-02 -0.30000000E-03  0.10000000E-03\n")
+    blocks, selective = read_poscar_blocks(path)
+    assert blocks == [("Si", 1), ("H", 1)]
+    assert selective is False
+
+
+def test_selective_dynamics_carries_through_a_continuation(tmp_path):
+    src = _finished_run(tmp_path)
+    (src / "CONTCAR").write_text(
+        "Si H\n1.0\n10 0 0\n0 10 0\n0 0 10\nSi H\n1 1\n"
+        "Selective dynamics\nDirect\n0 0 0 F F F\n0.1 0 0 T T T\n")
+    now = 1_700_000_000
+    os.utime(src / "CONTCAR", (now, now))
+    dest = tmp_path / "run2"
+    continuation_dir(src, dest)
+    blocks, selective = read_poscar_blocks(dest / "POSCAR")
+    assert selective is True                     # read through the symlink
+    assert blocks == [("Si", 1), ("H", 1)]

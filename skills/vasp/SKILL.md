@@ -128,18 +128,41 @@ when the source looks still active, because a CONTCAR being written is a
 truncated geometry, and it warns when the source's relaxation never converged.
 Read `result["warnings"]` and report them; do not discard them.
 
-## Checking before submitting
+## Checking, before and after
 
 ```bash
 vasplint run_dir/                        # 0 = clean
 vasplint --site zih --strict run_*/      # warnings count as failures too
-vasplint --template templates/ run_dir/  # also compare the INCAR to its template
+vasplint --template templates/ run_dir/  # where to look for the template
+vasplint --outcar run_dir/               # also: did the run compute what the INCAR says?
 vasplint --json run_dir/                 # for scripts and hooks
 ```
 
 Findings are errors or warnings, and any check whose input is missing says it was
-skipped rather than passing quietly. `vasplint` is for directories that are about
-to run; for a finished calculation use `vaspcheck` and `vaspcheck-outcar`.
+skipped rather than passing quietly.
+
+**Templates resolve in three places**, in order: the run directory itself, then
+any `--template` directory (repeatable), then `$VASPLINT_TEMPLATES`
+(colon-separated). The INCAR names its own template in its header; these only say
+where to look. Dropping a copy of the template into the run directory therefore
+makes the calculation verify anywhere, including on a compute node where the
+project tree is not mounted. A declared template that cannot be found is
+reported, never silently skipped.
+
+**`--outcar` closes the gap a pre-submission check cannot cover.** VASP re-prints
+the parameters it actually used, which is the only witness to an INCAR edited
+after linting, a value VASP overrode, or a tag it silently ignored because it was
+misspelled (`ENCUTT = 520` is accepted by every pre-run check there is). It also
+makes the `KPAR` check exact, because the OUTCAR states how many irreducible
+k-points the run really had, where a mesh product is only an upper bound.
+
+Two things `--outcar` deliberately does not treat as mismatches, because VASP
+resolves rather than echoes them: `ISTART` is a request that drops to 0 when
+there is no WAVECAR, and `GGA = --` means the functional came from the POTCAR.
+Tags VASP reports nowhere are listed as skipped rather than assumed to match.
+
+`vaspcheck` and `vaspcheck-outcar` remain the tools for whether a finished run
+*converged*; `vasplint --outcar` is about whether it computed the right thing.
 
 ## Templates
 
