@@ -48,6 +48,7 @@ __all__ = [
     "build_potcar_from_reference",
     "check_run_type",
     "continuation_dir",
+    "element_of_titel",
     "forbidden_tags",
     "incar_provenance",
     "link_potcar",
@@ -499,6 +500,21 @@ def incar_provenance(path) -> dict | None:
 
 
 # ── POTCAR ──────────────────────────────────────────────────────────────────
+def element_of_titel(titel: str) -> str:
+    """The bare element symbol named by a POTCAR TITEL value.
+
+    PAW suffixes are stripped, so ``PAW_PBE K_pv 17Jan2003`` gives ``K``. A
+    POSCAR species line carries plain symbols, so comparing anything else
+    against it produces false mismatches. Same rule as
+    :func:`tools4vasp.outcar_convergence._parse_potcar_poscar_elements` and
+    :func:`tools4vasp.vaspcheck.check_vasp_potcar_order`.
+    """
+    parts = titel.split()
+    if len(parts) < 2:
+        raise VaspSetupError(f"cannot read an element from TITEL {titel!r}")
+    return parts[1].split("_")[0]
+
+
 def read_titels(potcar_path) -> list[str]:
     """Every ``TITEL`` string in a POTCAR, in file order. Follows symlinks."""
     titels = []
@@ -527,7 +543,7 @@ def split_potcar(potcar_path) -> list[tuple[str, str]]:
             if len(titels) != 1:
                 raise VaspSetupError(
                     f"{path}: block {len(blocks)} has {len(titels)} TITEL lines")
-            blocks.append((titels[0].split()[1], "".join(chunk)))
+            blocks.append((element_of_titel(titels[0]), "".join(chunk)))
             start = i + 1
     if not blocks:
         raise VaspSetupError(f"no 'End of Dataset' delimiters found in {path}")
@@ -542,29 +558,53 @@ def build_potcar_from_reference(blocks, reference, out_path, expected_titels=Non
     reference POTCAR rather than from a pseudopotential library is how a new
     calculation is made provably identical to an existing dataset.
 
-    ``expected_titels`` maps element -> TITEL and is verified if given.
+    ``expected_titels`` maps element -> TITEL and is verified if given. It also
+    disambiguates: a reference POTCAR may hold two potentials for one element
+    (``Ti`` and ``Ti_sv``), and a POSCAR species line cannot say which is meant,
+    so the choice is refused unless ``expected_titels`` names one.
     """
     wanted = [element for element, _ in blocks]
-    pool: dict[str, str] = {}
-    titel_of: dict[str, str] = {}
+    pool: dict[str, list[tuple[str, str]]] = {}
     for element, text in split_potcar(reference):
-        pool.setdefault(element, text)
-        titel_of.setdefault(element, read_titels_from_text(text))
+        titel = read_titels_from_text(text)
+        known = pool.setdefault(element, [])
+        if titel not in [t for t, _ in known]:
+            known.append((titel, text))
+
     missing = [e for e in wanted if e not in pool]
     if missing:
         raise VaspSetupError(
             f"reference POTCAR {reference} has no block for {missing}; "
             f"it provides {sorted(pool)}")
+
+    chosen: dict[str, tuple[str, str]] = {}
+    for element in dict.fromkeys(wanted):
+        candidates = pool[element]
+        if len(candidates) == 1:
+            chosen[element] = candidates[0]
+            continue
+        want = (expected_titels or {}).get(element)
+        match = [c for c in candidates if c[0] == want]
+        if not match:
+            raise VaspSetupError(
+                f"reference POTCAR {reference} holds {len(candidates)} different "
+                f"potentials for {element} ({', '.join(t for t, _ in candidates)}); "
+                "a POSCAR species line cannot say which is meant, so pass "
+                "expected_titels to choose")
+        chosen[element] = match[0]
+
     if expected_titels:
-        wrong = {e: (titel_of[e], expected_titels.get(e))
-                 for e in set(wanted)
-                 if expected_titels.get(e) not in (None, titel_of[e])}
+        wrong = {e: (chosen[e][0], expected_titels.get(e))
+                 for e in chosen
+                 if expected_titels.get(e) not in (None, chosen[e][0])}
         if wrong:
             detail = "\n  ".join(
-                f"{e}: found {found!r}, expected {want!r}" for e, (found, want) in wrong.items())
+                f"{e}: found {found!r}, expected {want!r}"
+                for e, (found, want) in wrong.items())
             raise VaspSetupError(f"POTCAR provenance mismatch:\n  {detail}")
-    Path(out_path).write_text("".join(pool[e] for e in wanted))
-    got, want = read_titels(out_path), [titel_of[e] for e in wanted]
+
+    Path(out_path).write_text("".join(chosen[e][1] for e in wanted))
+    got, want = read_titels(out_path), [chosen[e][0] for e in wanted]
     if got != want:
         raise VaspSetupError(
             f"POTCAR assembly check failed for {out_path}:\n  got  {got}\n  want {want}")

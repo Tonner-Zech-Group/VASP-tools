@@ -19,6 +19,7 @@ from tools4vasp.vaspsetup import (
     check_run_type,
     continuation_dir,
     count_interactive_structures,
+    element_of_titel,
     forbidden_tags,
     incar_provenance,
     link_potcar,
@@ -94,6 +95,19 @@ OUTCAR_RUNNING = """\
 def _potcar(path, elements):
     path.write_text("".join(
         POTCAR_BLOCK.format(el=el, date=_DATE[el], zval=4) for el in elements))
+    return path
+
+
+def _potcar_titels(path, titels):
+    """A POTCAR built from explicit TITEL strings, suffixes included."""
+    blocks = []
+    for titel in titels:
+        symbol = titel.split()[1]
+        blocks.append(
+            f" {titel}\n   4.00000000000000000\n parameters from PSCTR are:\n"
+            f"   VRHFIN ={symbol}: s2p2\n   TITEL  = {titel}\n   LEXCH  = PE\n"
+            "End of Dataset\n")
+    path.write_text("".join(blocks))
     return path
 
 
@@ -653,3 +667,60 @@ def test_continuation_dir_applies_incar_overrides(tmp_path):
     tags = parse_incar(dest / "INCAR")
     assert tags["NSW"] == "50" and tags["IBRION"] == "2"
     assert incar_provenance(dest / "INCAR")["overrides"] == ["IBRION", "NSW"]
+
+
+# ---------------------------------------------------------------------------
+# PAW potential suffixes (Copilot review on PR #30)
+# ---------------------------------------------------------------------------
+
+TITEL_KPV = "PAW_PBE K_pv 17Jan2003"
+TITEL_TISV = "PAW_PBE Ti_sv 07Sep2000"
+TITEL_TI = "PAW_PBE Ti 08Apr2002"
+
+
+def test_element_of_titel_strips_paw_suffixes():
+    assert element_of_titel(TITEL_KPV) == "K"
+    assert element_of_titel(TITEL_TISV) == "Ti"
+    assert element_of_titel("PAW_PBE Si 05Jan2001") == "Si"
+
+
+def test_element_of_titel_rejects_a_malformed_line():
+    with pytest.raises(VaspSetupError, match="cannot read an element"):
+        element_of_titel("PAW_PBE")
+
+
+def test_split_potcar_keys_blocks_by_the_bare_symbol(tmp_path):
+    """A POSCAR species line has no suffix, so K_pv must key as K."""
+    path = _potcar_titels(tmp_path / "POTCAR", [TITEL_KPV, TITEL_TISV])
+    assert [el for el, _ in split_potcar(path)] == ["K", "Ti"]
+
+
+def test_build_potcar_from_reference_accepts_suffixed_potentials(tmp_path):
+    reference = _potcar_titels(tmp_path / "ref_POTCAR", [TITEL_KPV, TITEL_TISV])
+    out = tmp_path / "POTCAR"
+    assert build_potcar_from_reference([("K", 1), ("Ti", 2)], reference, out) == ["K", "Ti"]
+    assert read_titels(out) == [TITEL_KPV, TITEL_TISV]
+
+
+def test_build_potcar_from_reference_verifies_a_suffixed_titel(tmp_path):
+    reference = _potcar_titels(tmp_path / "ref_POTCAR", [TITEL_TISV])
+    build_potcar_from_reference([("Ti", 1)], reference, tmp_path / "ok",
+                                expected_titels={"Ti": TITEL_TISV})
+    with pytest.raises(VaspSetupError, match="provenance mismatch"):
+        build_potcar_from_reference([("Ti", 1)], reference, tmp_path / "bad",
+                                    expected_titels={"Ti": TITEL_TI})
+
+
+def test_build_potcar_from_reference_refuses_an_ambiguous_element(tmp_path):
+    """Ti and Ti_sv both key as Ti; a POSCAR cannot say which is meant."""
+    reference = _potcar_titels(tmp_path / "ref_POTCAR", [TITEL_TI, TITEL_TISV])
+    with pytest.raises(VaspSetupError, match=r"different\s+potentials for Ti"):
+        build_potcar_from_reference([("Ti", 1)], reference, tmp_path / "POTCAR")
+
+
+def test_expected_titels_disambiguates_an_ambiguous_element(tmp_path):
+    reference = _potcar_titels(tmp_path / "ref_POTCAR", [TITEL_TI, TITEL_TISV])
+    out = tmp_path / "POTCAR"
+    build_potcar_from_reference([("Ti", 1)], reference, out,
+                                expected_titels={"Ti": TITEL_TISV})
+    assert read_titels(out) == [TITEL_TISV]

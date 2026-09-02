@@ -31,6 +31,7 @@ from tools4vasp.vaspsetup import (
     VaspSetupError,
     check_run_type,
     count_interactive_structures,
+    element_of_titel,
     incar_provenance,
     parse_incar,
     read_poscar_blocks,
@@ -188,7 +189,9 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
     elif blocks is not None:
         titels = read_titels(potcar)
         wanted = [element for element, _ in blocks]
-        got = [t.split()[1] if len(t.split()) > 1 else t for t in titels]
+        # Bare symbols: a POSCAR species line has no PAW suffix, so comparing
+        # "Ti_sv" against "Ti" would be a false mismatch.
+        got = [element_of_titel(t) for t in titels]
         if got != wanted:
             findings.append(_finding(
                 "potcar", "error",
