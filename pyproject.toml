@@ -69,6 +69,13 @@ xyz2POSCAR = "tools4vasp.xyz2POSCAR:main"
 packages = ["tools4vasp",'tools4vasp.bash_scripts']
 package-dir = {'' = 'src'}
 
+# Without this the wheel ships bash_scripts/__init__.py and nothing else, so
+# every console script that shells out to a .sh file (getPOTCAR,
+# replace_potcar_symlinks, calc-deformation-density, plot_neb_movie) and
+# vaspsetup.build_potcar_from_pp_path() are broken for a pip install.
+[tool.setuptools.package-data]
+"tools4vasp.bash_scripts" = ["*.sh"]
+
 [tool.pytest.ini_options]
 testpaths = ["test"]
 addopts = "-v"

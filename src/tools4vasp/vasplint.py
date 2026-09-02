@@ -46,8 +46,43 @@ __all__ = ["infer_run_type", "lint", "main", "run"]
 _DIPOLE_TAGS = ("LDIPOL", "IDIPOL", "DIPOL", "EPSILON")
 
 
+#: Colon-separated template directories, so a caller that does not know which
+#: template a given INCAR came from can still have the check run. The INCAR
+#: names its own template in the header; this only says where to look.
+TEMPLATES_ENV = "VASPLINT_TEMPLATES"
+
+
 def _finding(check, level, message):
     return {"check": check, "level": level, "message": message}
+
+
+def template_dirs(explicit=None) -> list:
+    """Template directories the caller *configured*, argument first, then the
+    environment.
+
+    The run directory is searched too (see :func:`lint`) but is deliberately not
+    listed here: whether the caller configured anything decides how loudly a
+    missing template is reported.
+    """
+    dirs = []
+    if explicit:
+        dirs += [Path(p) for p in ([explicit] if isinstance(explicit, (str, Path))
+                                   else list(explicit))]
+    dirs += [Path(p) for p in os.environ.get(TEMPLATES_ENV, "").split(os.pathsep) if p]
+    seen, out = set(), []
+    for d in dirs:
+        if d.is_dir() and d.resolve() not in seen:
+            seen.add(d.resolve())
+            out.append(d)
+    return out
+
+
+def _find_template(name, dirs):
+    for d in dirs:
+        candidate = d / name
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def infer_run_type(tags: dict) -> str:
@@ -127,7 +162,11 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
     if not path.is_dir():
         raise VaspSetupError(f"not a directory: {path}")
     findings, skipped = [], []
-    template_dir = Path(template) if template else None
+    # The run directory is searched first, so a calculation carrying a copy of
+    # its own template verifies anywhere, including on a compute node where the
+    # project tree is not mounted.
+    configured = template_dirs(template)
+    searched = [path] + configured
 
     # ── INCAR, and the run type everything else is judged against ───────────
     incar_path = path / "INCAR"
@@ -315,8 +354,11 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                 "single k-point, which is almost never what was intended"))
     else:
         mesh = _parse_kpoints_mesh(kpoints)
-        if template_dir and (template_dir / "KPOINTS").exists():
-            want = _parse_kpoints_mesh(template_dir / "KPOINTS")
+        # Configured directories only: the run directory holds the KPOINTS being
+        # checked, so searching it too would compare the file against itself.
+        reference_kpoints = _find_template("KPOINTS", configured)
+        if reference_kpoints is not None:
+            want = _parse_kpoints_mesh(reference_kpoints)
             if mesh and want and mesh != want:
                 findings.append(_finding(
                     "kpoints", "error",
@@ -334,21 +376,35 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                 "reduction can leave fewer k-points than the mesh product, so a "
                 "KPAR below this bound may still be too large"))
 
-    # ── INCAR against its template ──────────────────────────────────────────
-    if tags and template_dir:
+    # ── INCAR against the template it names ─────────────────────────────────
+    # A missing template is reported, never silently skipped: this is the
+    # strongest check in the tool, and "skipped" in a passing report is how it
+    # came to be enforced nowhere.
+    if tags:
         if provenance is None:
-            findings.append(_finding(
-                "template", "warning",
-                "this INCAR carries no tools4vasp provenance comment, so it cannot "
-                "be checked against a template; it was not built by "
-                "tools4vasp.vaspsetup"))
+            if configured:
+                findings.append(_finding(
+                    "template", "warning",
+                    "a template directory was given but this INCAR carries no "
+                    "tools4vasp provenance header, so it cannot be compared to "
+                    "one; it was not built by tools4vasp.vaspsetup"))
+            else:
+                skipped.append("template: this INCAR carries no provenance header "
+                               "and no template directory is configured")
         else:
-            tmpl_path = template_dir / provenance["template"]
-            if not tmpl_path.exists():
+            tmpl_path = _find_template(provenance["template"], searched)
+            if tmpl_path is None and not configured:
+                findings.append(_finding(
+                    "template", "warning",
+                    f"this INCAR declares template {provenance['template']!r} but no "
+                    f"template directory is configured (--template or "
+                    f"${TEMPLATES_ENV}), so undeclared deviations from it were not "
+                    "checked"))
+            elif tmpl_path is None:
                 findings.append(_finding(
                     "template", "error",
-                    f"the INCAR names template {provenance['template']!r}, which is "
-                    f"not in {template_dir}"))
+                    f"this INCAR declares template {provenance['template']!r}, which "
+                    f"is not in {', '.join(str(d) for d in searched)}"))
             else:
                 tmpl_tags = parse_incar(tmpl_path)
                 now = template_fingerprint(tmpl_tags)
@@ -358,22 +414,18 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                         f"the template {tmpl_path.name} has changed since this INCAR "
                         f"was built (fingerprint {now} vs {provenance['sha256']}), so "
                         "the two are no longer comparable"))
-                declared = {t.upper() for t in provenance["overrides"]}
-                differing = {t for t in set(tags) | set(tmpl_tags)
-                             if tags.get(t) != tmpl_tags.get(t)}
+                declared = {tag.upper() for tag in provenance["overrides"]}
+                differing = {tag for tag in set(tags) | set(tmpl_tags)
+                             if tags.get(tag) != tmpl_tags.get(tag)}
                 undeclared = sorted(differing - declared)
                 if undeclared:
                     detail = ", ".join(
-                        f"{t}: template {tmpl_tags.get(t, '(absent)')!r} vs INCAR "
-                        f"{tags.get(t, '(absent)')!r}" for t in undeclared)
+                        f"{tag}: template {tmpl_tags.get(tag, '(absent)')!r} vs INCAR "
+                        f"{tags.get(tag, '(absent)')!r}" for tag in undeclared)
                     findings.append(_finding(
                         "template", "error",
                         f"{len(undeclared)} tag(s) differ from the template without "
                         f"being declared as overrides: {detail}"))
-                # Compared against the template the INCAR actually names, not
-                # against a file assumed to be called "INCAR": templates are
-                # conventionally "INCAR.template", and hardcoding the name made
-                # this check silently do nothing.
                 for tag in _DIPOLE_TAGS:
                     if (tag in tags) != (tag in tmpl_tags):
                         where = "INCAR" if tag in tags else "template"
@@ -382,8 +434,6 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                             f"{tag} is set in the {where} only; a dipole correction "
                             "changes the energy zero, so mixing corrected and "
                             "uncorrected runs in one comparison is not valid"))
-    elif tags:
-        skipped.append("template: no --template given, INCAR not compared to one")
 
     errors = [f for f in findings if f["level"] == "error"]
     warnings = [f for f in findings if f["level"] == "warning"]
@@ -415,11 +465,16 @@ def main():
     """CLI entry point: vasplint [path ...]."""
     parser = argparse.ArgumentParser(
         description="Check VASP input directories before submitting them.",
-        epilog="Example: vasplint --site zih --template templates/ --strict run_*/")
+        epilog=f"Example: vasplint --site zih --template templates/ --strict run_*/\n"
+               f"The INCAR names its own template in its header; --template and "
+               f"${TEMPLATES_ENV} only say where to look for it.")
     parser.add_argument("paths", nargs="*", default=["."],
                         help="run directories to check (default: the current one)")
-    parser.add_argument("--template", default=None,
-                        help="directory holding the INCAR/KPOINTS templates to compare against")
+    parser.add_argument("--template", action="append", default=None, metavar="DIR",
+                        help="directory holding the INCAR/KPOINTS templates to compare "
+                             f"against, repeatable. ${TEMPLATES_ENV} is also searched "
+                             "(colon-separated), so a caller that does not know which "
+                             "template an INCAR came from can still have the check run")
     parser.add_argument("--run-type", default=None,
                         help="override the run type inferred from the INCAR")
     sites = "; ".join(f"{name}: {' '.join(flags)}"
