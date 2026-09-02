@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.2] - 2026-09-02
+
+Maintenance release — no changes to tool behaviour.
+
+### Dependencies
+
+- Bumped the pinned `setuptools` in `requirements.txt` from 78.1.1 to 83.0.0. (PR #26)
+
+### Documentation
+
+- Removed the "Environment notes (this dev container)" section from `CLAUDE.md`. It documented an SSH agent socket path specific to one contributor's local dev container — not portable to other machines, and already stale. (PR #29)
+
 ## [1.3.1] - 2026-06-11
 
 ### Bug Fixes

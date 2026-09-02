@@ -4,7 +4,7 @@ title: "VASP-tools"
 abstract: "A collection of Python and Bash tools for pre- and post-processing VASP DFT calculations."
 type: software
 version: "1.3.2"
-date-released: "2026-07-30"
+date-released: "2026-09-02"
 license: MIT
 repository-code: "https://github.com/Tonner-Zech-Group/VASP-tools"
 doi: 10.5281/zenodo.15525217
