@@ -117,7 +117,9 @@ Key points:
 1. In the feature branch, add a `## [<version>] - <YYYY-MM-DD>` section to
    `CHANGELOG.md` covering everything merged since the previous tag
    (`git log v<previous>..main`). Every released version needs an entry, even
-   a docs/metadata-only one.
+   a docs/metadata-only one. Re-check this immediately before merging: any
+   other PR that lands on `main` first becomes part of *this* release, since
+   the tag is cut from `main`, not from the feature branch.
 2. Bump `version` in `pyproject.toml` and `CITATION.cff`, and set
    `date-released` in `CITATION.cff` to the same date as the changelog heading
    — i.e. the expected merge date, since the tag is cut on merge. If the merge
