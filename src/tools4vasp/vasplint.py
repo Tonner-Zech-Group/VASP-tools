@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -34,12 +35,37 @@ from tools4vasp.vaspsetup import (
     element_of_titel,
     incar_provenance,
     parse_incar,
+    potcar_enmax,
     read_poscar_blocks,
     read_titels,
     template_fingerprint,
 )
 
-__all__ = ["infer_run_type", "lint", "main", "run"]
+__all__ = ["compare_incar_to_outcar", "infer_run_type", "lint", "main",
+           "outcar_effective_tags", "run"]
+
+#: ALGO name -> the IALGO code VASP echoes for it. VASP never echoes ALGO by
+#: name, so this is the only way to verify it.
+_ALGO_TO_IALGO = {"NORMAL": "38", "VERYFAST": "48", "FAST": "68", "ALL": "58",
+                  "DAMPED": "53"}
+
+#: Tags VASP 5.4.4 reports nowhere, established by reading a real OUTCAR rather
+#: than assumed. A declared override among these cannot be verified after the
+#: fact; one *outside* this set that is also missing is suspicious, because VASP
+#: silently ignores tags it does not recognise.
+_NOT_REPORTED = frozenset({
+    "ADDGRID", "INTERACTIVE", "LAECHG", "LPLANE", "LSCALU", "NSIM", "SYMPREC",
+    "NBANDS", "NUPDOWN", "LORBIT", "IMIX", "KSPACING",
+})
+
+#: Tags whose echo cannot be compared literally, with the reason.
+_NOT_LITERAL = {
+    "GGA": "VASP echoes '--' when the functional comes from the POTCAR, which is "
+           "what an explicit PE means for PAW_PBE potentials",
+    "LREAL": "'Auto' resolves to T or F depending on system size, so either echo "
+             "is consistent",
+    "SYSTEM": "free-text label, truncated in the echo",
+}
 
 #: Files that, if present, are read from disk by VASP and must therefore exist
 #: when the INCAR says to read them.
@@ -104,6 +130,164 @@ def infer_run_type(tags: dict) -> str:
     return "relax"
 
 
+def outcar_effective_tags(text: str) -> dict:
+    """The parameters VASP actually used, read out of an OUTCAR's own echo.
+
+    VASP re-prints the INCAR it ran with, in INCAR syntax (several tags per line
+    separated by ``;``) followed by explanatory prose, so the value is the first
+    token after ``=``. Several quantities are reported elsewhere in the file
+    instead of in that block and are recovered separately: the irreducible
+    k-point count, the band/k-point parallel layout that gives NCORE and KPAR,
+    and the dispersion correction.
+
+    Returns upper-case tag -> value string, plus the derived keys ``NKPTS``,
+    ``_NCORE``, ``_KPAR``.
+    """
+    head = re.split(r"-{20,} Iteration", text, maxsplit=1)[0]
+    tags: dict[str, str] = {}
+    for line in head.splitlines():
+        if "=" not in line:
+            continue
+        for segment in line.split(";"):
+            match = re.match(r"\s*([A-Z][A-Z0-9_]{1,11})\s*=\s*(\S+)", segment)
+            if match:
+                tags.setdefault(match.group(1), match.group(2))
+
+    # Reported outside the parameter block.
+    for key, pattern in (
+        ("NKPTS", r"NKPTS\s*=\s*(\d+)"),
+        ("_NKPTS_IRR", r"Found\s+(\d+)\s+irreducible k-points"),
+        ("_NCORE", r"one band on NCORES_PER_BAND=\s*(\d+)"),
+        ("_KPAR", r"each k-point on\s+\d+\s+cores,\s*(\d+)\s+groups"),
+        ("_RANKS", r"running on\s+(\d+) total cores"),
+        ("IVDW", r"^\s*IVDW\s*=\s*(\d+)"),
+    ):
+        match = re.search(pattern, text, re.MULTILINE)
+        if match:
+            tags[key] = match.group(1)
+    return tags
+
+
+def _norm_bool(value):
+    v = value.strip().upper().strip(".")
+    return {"T": "T", "TRUE": "T", "F": "F", "FALSE": "F"}.get(v)
+
+
+def _as_float(value):
+    try:
+        return float(value.strip().replace("D", "E"))
+    except ValueError:
+        return None
+
+
+def _values_agree(incar_value, outcar_value):
+    """Is the echoed value consistent with what the INCAR asked for?
+
+    Booleans are compared as booleans (``.FALSE.`` against ``F``), numbers
+    numerically with a tolerance taken from the echo's own printed precision
+    (VASP prints BMIX=0.0001 as ``0.00``), and strings case-insensitively
+    allowing the echo to be truncated (``accura`` for ``Accurate``).
+    """
+    incar_value, outcar_value = incar_value.strip(), outcar_value.strip()
+    a, b = _norm_bool(incar_value), _norm_bool(outcar_value)
+    if a and b:
+        return a == b
+    fa, fb = _as_float(incar_value), _as_float(outcar_value)
+    if fa is not None and fb is not None:
+        # Tolerance is half of the echo's own last printed digit, exponent
+        # included: "0.1E-05" is precise to 5e-7, not to 0.05. Without the
+        # exponent the bound would be so loose that EDIFF = 0.04 would pass for
+        # a run that used 1e-6.
+        mantissa, _, exponent = outcar_value.upper().replace("D", "E").partition("E")
+        decimals = len(mantissa.split(".")[1]) if "." in mantissa else 0
+        try:
+            scale = 10.0 ** int(exponent) if exponent else 1.0
+        except ValueError:
+            scale = 1.0
+        tol = max(0.5 * 10 ** (-decimals) * scale, abs(fa) * 1e-9)
+        return abs(fa - fb) <= tol
+    lower_in, lower_out = incar_value.lower(), outcar_value.lower()
+    return lower_in == lower_out or lower_in.startswith(lower_out)
+
+
+def compare_incar_to_outcar(incar_tags, outcar_text, declared=()):
+    """Compare an INCAR against the parameters VASP reports having used.
+
+    This is the check that closes the gap left by a pre-submission linter: it
+    sees post-lint edits, values VASP overrode, and tags VASP silently ignored
+    because they are misspelled. Returns ``(findings, skipped)``.
+    """
+    effective = outcar_effective_tags(outcar_text)
+    if not effective:
+        return ([_finding("outcar", "error",
+                          "no parameter echo found in the OUTCAR; it is truncated "
+                          "or not an OUTCAR")], [])
+    findings, skipped = [], []
+    declared = {tag.upper() for tag in declared}
+
+    for tag, wanted in sorted(incar_tags.items()):
+        if tag in _NOT_LITERAL:
+            skipped.append(f"outcar {tag}: {_NOT_LITERAL[tag]}")
+            continue
+        if tag == "ISTART":
+            # A request, not a setting: ISTART=1 or 2 degrades to 0 when there is
+            # no WAVECAR to read, which is the normal case for the first
+            # structure of an interactive walk. Only a request VASP could not
+            # have lowered is a mismatch.
+            got = effective.get("ISTART")
+            if got is not None and wanted.strip() == "0" and got.strip() != "0":
+                findings.append(_finding(
+                    "outcar", "error",
+                    f"ISTART = 0 in the INCAR but the run started from {got}"))
+            elif got is None:
+                skipped.append("outcar ISTART: not found in the OUTCAR")
+            else:
+                skipped.append(
+                    f"outcar ISTART: requested {wanted}, run used {got.strip()}; "
+                    "VASP lowers it when there is no WAVECAR to read")
+            continue
+        if tag == "ALGO":
+            code = _ALGO_TO_IALGO.get(wanted.strip().upper())
+            got = effective.get("IALGO")
+            if code and got and code != got.strip():
+                findings.append(_finding(
+                    "outcar", "error",
+                    f"ALGO = {wanted} means IALGO = {code}, but the run used "
+                    f"IALGO = {got}"))
+            elif not (code and got):
+                skipped.append("outcar ALGO: no IALGO echo to compare against")
+            continue
+        derived = {"NCORE": "_NCORE", "KPAR": "_KPAR"}.get(tag)
+        got = effective.get(derived) if derived else effective.get(tag)
+        if got is None:
+            if tag in _NOT_REPORTED:
+                skipped.append(f"outcar {tag}: VASP does not report it")
+            elif tag in declared:
+                findings.append(_finding(
+                    "outcar", "warning",
+                    f"{tag} is a declared override but does not appear anywhere in "
+                    "the OUTCAR; VASP silently ignores tags it does not recognise, "
+                    "so check the spelling"))
+            else:
+                skipped.append(f"outcar {tag}: not found in the OUTCAR")
+            continue
+        if not _values_agree(wanted, got):
+            findings.append(_finding(
+                "outcar", "error",
+                f"{tag} = {wanted} in the INCAR but the run used {got}"))
+
+    # Now exact rather than a necessary condition: the OUTCAR states how many
+    # irreducible k-points there actually were.
+    nkpts = effective.get("_NKPTS_IRR") or effective.get("NKPTS")
+    kpar = incar_tags.get("KPAR", "1").strip()
+    if nkpts and kpar.isdigit() and int(kpar) > int(nkpts):
+        findings.append(_finding(
+            "outcar", "error",
+            f"KPAR = {kpar} exceeds the {nkpts} irreducible k-points this run "
+            "actually had"))
+    return findings, skipped
+
+
 def _parse_kpoints_mesh(path):
     """The automatic mesh of a KPOINTS file, or None if it is not automatic."""
     lines = Path(path).read_text(errors="replace").splitlines()
@@ -147,7 +331,7 @@ def _find_job_script(path: Path):
 
 
 def lint(path=".", template=None, run_type=None, expected_titels=None,
-         require=()):
+         require=(), outcar=False):
     """Check the VASP input directory ``path``; return findings and context.
 
     Returns ``{"path", "run_type", "findings", "skipped", "errors", "warnings"}``.
@@ -248,6 +432,73 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                     + "\n    ".join(wrong)))
     else:
         skipped.append("potcar: POSCAR species blocks unavailable")
+
+    # ── basis set: is the cutoff high enough for these potentials? ──────────
+    if potcar.exists() and "ENCUT" in tags:
+        try:
+            datasets = potcar_enmax(potcar)
+        except VaspSetupError as exc:
+            skipped.append(f"encut: {exc}")
+            datasets = []
+        encut = tags["ENCUT"].strip()
+        if datasets and encut.replace(".", "", 1).isdigit():
+            worst, needed = max(datasets, key=lambda d: d[1])
+            encut = float(encut)
+            if encut < needed:
+                findings.append(_finding(
+                    "encut", "error",
+                    f"ENCUT = {encut:g} eV is below the {needed:g} eV that "
+                    f"{worst} was generated for; the basis set is incomplete for "
+                    "this pseudopotential"))
+            isif = tags.get("ISIF", "2").strip()
+            if isif.isdigit() and int(isif) >= 3 and encut < 1.3 * needed:
+                findings.append(_finding(
+                    "encut", "warning",
+                    f"ISIF = {isif} changes the cell, and ENCUT = {encut:g} eV is "
+                    f"below 1.3 x max(ENMAX) = {1.3 * needed:.0f} eV; a fixed "
+                    "plane-wave count makes the basis set change with the volume"))
+        elif not datasets:
+            skipped.append("encut: no ENMAX found in the POTCAR")
+
+    # ── spin and Hubbard U consistency ──────────────────────────────────────
+    if tags.get("ISPIN", "1").strip() == "2" and "MAGMOM" in tags and blocks:
+        natoms = sum(count for _, count in blocks)
+        given = 0
+        for token in tags["MAGMOM"].split():
+            if "*" in token:
+                multiplier, _, _ = token.partition("*")
+                given += int(multiplier) if multiplier.strip().isdigit() else 0
+            elif token.strip():
+                given += 1
+        if given and given != natoms:
+            findings.append(_finding(
+                "spin", "error",
+                f"MAGMOM gives {given} moments for {natoms} atoms; VASP reads them "
+                "positionally, so every atom after the mismatch gets the wrong "
+                "starting moment"))
+    if tags.get("LDAU", ".FALSE.").upper().startswith(".T"):
+        lmaxmix = tags.get("LMAXMIX", "2").strip()
+        if lmaxmix.isdigit() and int(lmaxmix) < 4:
+            findings.append(_finding(
+                "ldau", "error",
+                f"LDAU is on but LMAXMIX = {lmaxmix}; the on-site occupancies it "
+                "mixes need LMAXMIX 4 for d electrons and 6 for f, otherwise the "
+                "density and the total energy do not converge to the same answer"))
+
+    # ── a band needs its images ─────────────────────────────────────────────
+    if detected == "neb" and "IMAGES" in tags:
+        n_images = tags["IMAGES"].strip()
+        if n_images.isdigit():
+            wanted = [f"{i:02d}" for i in range(int(n_images) + 2)]
+            missing = [name for name in wanted
+                       if not (path / name / "POSCAR").is_file()]
+            if missing:
+                findings.append(_finding(
+                    "neb", "error",
+                    f"IMAGES = {n_images} needs image directories "
+                    f"{wanted[0]}..{wanted[-1]} each with a POSCAR (00 and "
+                    f"{wanted[-1]} are the endpoints); missing: "
+                    f"{', '.join(missing)}"))
 
     # ── every symlink relative and resolving ────────────────────────────────
     for entry in sorted(path.iterdir()):
@@ -435,6 +686,21 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                             "changes the energy zero, so mixing corrected and "
                             "uncorrected runs in one comparison is not valid"))
 
+    # ── what actually ran, against what was asked for ───────────────────────
+    if outcar:
+        from tools4vasp.outcar_convergence import _find_outcar, _read_outcar_text
+        found = _find_outcar(str(path))
+        if found is None:
+            skipped.append("outcar: no OUTCAR in this directory yet")
+        elif not tags:
+            skipped.append("outcar: no INCAR to compare the run against")
+        else:
+            declared = provenance["overrides"] if provenance else ()
+            more, notes = compare_incar_to_outcar(
+                tags, _read_outcar_text(found), declared=declared)
+            findings += more
+            skipped += notes
+
     errors = [f for f in findings if f["level"] == "error"]
     warnings = [f for f in findings if f["level"] == "warning"]
     return {"path": str(path), "run_type": detected or "unknown",
@@ -443,10 +709,10 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
 
 
 def run(path=".", template=None, run_type=None, expected_titels=None,
-        verbose=True, strict=False, require=()):
+        verbose=True, strict=False, require=(), outcar=False):
     """Lint ``path`` and print a human-readable report. Returns the lint dict."""
     result = lint(path, template=template, run_type=run_type,
-                  expected_titels=expected_titels, require=require)
+                  expected_titels=expected_titels, require=require, outcar=outcar)
     if verbose:
         print(f"* vasplint {result['path']}  (run type: {result['run_type']})")
         for finding in result["findings"]:
@@ -486,6 +752,11 @@ def main():
                         help="extra #SBATCH directive the job script must carry, "
                              "repeatable. Attach the value with '=' so argparse does "
                              "not read it as an option: --require=--licenses=")
+    parser.add_argument("--outcar", action="store_true",
+                        help="also compare the INCAR against the parameters VASP "
+                             "reports having used, for a directory that has already "
+                             "run. Catches post-lint edits, values VASP overrode and "
+                             "tags it silently ignored, and makes the KPAR check exact")
     parser.add_argument("--strict", action="store_true",
                         help="treat warnings as failures too")
     parser.add_argument("--json", action="store_true",
@@ -498,7 +769,7 @@ def main():
         try:
             result = run(path, template=args.template, run_type=args.run_type,
                          verbose=not args.json, strict=args.strict,
-                         require=require)
+                         require=require, outcar=args.outcar)
         except VaspSetupError as exc:
             result = {"path": str(path), "errors": 1, "warnings": 0, "ok": False,
                       "findings": [_finding("input", "error", str(exc))], "skipped": []}

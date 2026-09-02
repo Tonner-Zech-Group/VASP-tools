@@ -11,8 +11,20 @@ from unittest.mock import patch
 
 import pytest
 
-from tools4vasp.vasplint import infer_run_type, lint, main, run
-from tools4vasp.vaspsetup import VaspSetupError, rel_symlink, render_incar
+from tools4vasp.vasplint import (
+    compare_incar_to_outcar,
+    infer_run_type,
+    lint,
+    main,
+    outcar_effective_tags,
+    run,
+)
+from tools4vasp.vaspsetup import (
+    VaspSetupError,
+    parse_incar,
+    rel_symlink,
+    render_incar,
+)
 
 POSCAR_VASP5 = """\
 Si H
@@ -601,3 +613,237 @@ def test_the_run_directory_kpoints_is_not_compared_against_itself(tmp_path):
     render_incar(templates / "INCAR.template", d / "INCAR")
     (d / "INCAR.template").write_text((templates / "INCAR.template").read_text())
     assert _errors(lint(d, template=templates), "kpoints")   # 2x2x1 vs 4x4x1
+
+
+# ---------------------------------------------------------------------------
+# post-run comparison against what VASP reports having used (council item 5)
+# ---------------------------------------------------------------------------
+
+# The echo really looks like this: INCAR syntax, several tags per line separated
+# by ';', trailing prose, values sometimes truncated or reformatted. Taken from
+# a VASP 5.4.4 OUTCAR.
+OUTCAR_ECHO = """\
+ running on   48 total cores
+ distrk:  each k-point on   24 cores,    2 groups
+ distr:  one band on NCORES_PER_BAND=  24 cores,    1 groups
+ Found      4 irreducible k-points:
+   k-points           NKPTS =      4   k-points in BZ     NKDIM =      4
+   PREC   = accura    normal or accurate
+   ISTART =      1    job   : 0-new  1-cont  2-samecut
+   ENCUT  =  400.0 eV  29.40 Ry
+   EDIFF  = 0.1E-05   stopping-criterion for ELM
+   NELM   =    150;   NELMIN=  5; NELMDL=-15     # of ELM steps
+   ISMEAR =      0;   SIGMA  =   0.05  broadening in eV
+   IALGO  =     68    algorithm
+   ISPIN  =      1    spin polarized calculation?
+   LREAL  =      T    real-space projection
+     AMIX     =   0.20;   BMIX     =  0.00
+   MAXMIX =     30    max number of ionic steps stored
+   IVDW         = 12
+------------------------------------------ Iteration      1(   1)  ---------
+ aborting loop because EDIFF is reached
+ General timing and accounting informations for this job:
+"""
+
+INCAR_MATCHING_ECHO = """\
+PREC = Accurate
+ISTART = 1
+ENCUT = 400
+EDIFF = 1.00e-06
+NELM = 150
+NELMIN = 5
+NELMDL = -15
+ISMEAR = 0
+SIGMA = 0.05
+ALGO = Fast
+ISPIN = 1
+LREAL = Auto
+AMIX = 0.2
+BMIX = 0.0001
+MAXMIX = 30
+IVDW = 12
+KPAR = 2
+NCORE = 24
+"""
+
+
+def test_outcar_effective_tags_recovers_the_derived_quantities():
+    eff = outcar_effective_tags(OUTCAR_ECHO)
+    assert eff["_NKPTS_IRR"] == "4"
+    assert eff["_NCORE"] == "24"
+    assert eff["_KPAR"] == "2"
+    assert eff["_RANKS"] == "48"
+    assert eff["IALGO"] == "68"
+    assert eff["IVDW"] == "12"
+    assert eff["SIGMA"] == "0.05"       # second tag on a ';' line
+    assert eff["BMIX"] == "0.00"        # reformatted by VASP
+
+
+def test_a_faithful_incar_produces_no_outcar_findings():
+    """None of VASP's reformatting may be mistaken for a mismatch."""
+    findings, _ = compare_incar_to_outcar(parse_incar(INCAR_MATCHING_ECHO), OUTCAR_ECHO)
+    assert findings == [], [f["message"] for f in findings]
+
+
+def test_a_post_run_incar_edit_is_caught():
+    tags = parse_incar(INCAR_MATCHING_ECHO.replace("ENCUT = 400", "ENCUT = 520"))
+    findings, _ = compare_incar_to_outcar(tags, OUTCAR_ECHO)
+    assert any("ENCUT" in f["message"] and f["level"] == "error" for f in findings)
+
+
+def test_algo_is_verified_through_ialgo():
+    tags = parse_incar(INCAR_MATCHING_ECHO.replace("ALGO = Fast", "ALGO = Normal"))
+    findings, _ = compare_incar_to_outcar(tags, OUTCAR_ECHO)
+    assert any("IALGO" in f["message"] for f in findings)
+
+
+def test_a_misspelled_declared_override_is_flagged():
+    """VASP silently ignores tags it does not know; the echo is the only witness."""
+    tags = parse_incar(INCAR_MATCHING_ECHO + "ENCUTT = 520\n")
+    findings, _ = compare_incar_to_outcar(tags, OUTCAR_ECHO, declared=["ENCUTT"])
+    assert any("ENCUTT" in f["message"] and "spelling" in f["message"]
+               for f in findings)
+
+
+def test_an_undeclared_unknown_tag_is_only_a_note():
+    tags = parse_incar(INCAR_MATCHING_ECHO + "ENCUTT = 520\n")
+    findings, skipped = compare_incar_to_outcar(tags, OUTCAR_ECHO)
+    assert not any("ENCUTT" in f["message"] for f in findings)
+    assert any("ENCUTT" in note for note in skipped)
+
+
+def test_istart_may_be_lowered_by_vasp_but_not_raised():
+    faithful, _ = compare_incar_to_outcar(
+        parse_incar("ISTART = 1\n"), OUTCAR_ECHO.replace("ISTART =      1", "ISTART =      0"))
+    assert faithful == []               # 1 -> 0 is VASP finding no WAVECAR
+    raised, _ = compare_incar_to_outcar(parse_incar("ISTART = 0\n"), OUTCAR_ECHO)
+    assert any("ISTART" in f["message"] for f in raised)
+
+
+def test_kpar_is_exact_against_the_irreducible_count():
+    tags = parse_incar(INCAR_MATCHING_ECHO.replace("KPAR = 2", "KPAR = 6"))
+    findings, _ = compare_incar_to_outcar(tags, OUTCAR_ECHO)
+    assert any("irreducible" in f["message"] for f in findings)
+
+
+def test_ediff_tolerance_respects_the_printed_exponent():
+    """0.1E-05 is precise to 5e-7, so a 1e-4 EDIFF must not slip through."""
+    ok, _ = compare_incar_to_outcar(parse_incar("EDIFF = 1.00e-06\n"), OUTCAR_ECHO)
+    assert ok == []
+    bad, _ = compare_incar_to_outcar(parse_incar("EDIFF = 1.00e-04\n"), OUTCAR_ECHO)
+    assert any("EDIFF" in f["message"] for f in bad)
+
+
+def test_a_truncated_outcar_is_an_error():
+    findings, _ = compare_incar_to_outcar(parse_incar("ENCUT = 400\n"), "nothing here")
+    assert findings and findings[0]["level"] == "error"
+
+
+def test_lint_outcar_flag_skips_a_directory_that_has_not_run(tmp_path):
+    d = _run_dir(tmp_path)
+    result = lint(d, outcar=True)
+    assert _errors(result, "outcar") == []
+    assert any("no OUTCAR" in note for note in result["skipped"])
+
+
+def test_lint_outcar_flag_reads_a_real_looking_outcar(tmp_path):
+    d = _run_dir(tmp_path, incar=INCAR_MATCHING_ECHO + "IBRION = -1\nNSW = 0\n")
+    (d / "OUTCAR").write_text(OUTCAR_ECHO)
+    assert _errors(lint(d, outcar=True), "outcar") == []
+    (d / "INCAR").write_text((d / "INCAR").read_text().replace("ENCUT = 400", "ENCUT = 520"))
+    assert _errors(lint(d, outcar=True), "outcar")
+
+
+# ---------------------------------------------------------------------------
+# the fixture matrix by tag space, not by this project's system (council item 7)
+# ---------------------------------------------------------------------------
+
+def _potcar_enmax(path, entries):
+    """A POTCAR carrying explicit TITEL/ENMAX pairs."""
+    path.write_text("".join(
+        f" {titel}\n   ENMAX  =  {enmax:.3f}; ENMIN  =  {enmax * 0.75:.3f} eV\n"
+        f"   TITEL  = {titel}\nEnd of Dataset\n" for titel, enmax in entries))
+    return path
+
+
+def test_encut_below_the_potcar_enmax_is_an_error(tmp_path):
+    """The most common real VASP input error, and absent from every fixture until now."""
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_enmax(d / "POTCAR", [("PAW_PBE K_pv 17Jan2003", 259.0),
+                                 ("PAW_PBE Ti_sv 07Sep2000", 274.6)])
+    findings = _errors(lint(d), "encut")          # template ENCUT = 400 is fine
+    assert findings == []
+    (d / "INCAR").write_text(INCAR_SINGLE_POINT.replace("ENCUT = 400", "ENCUT = 250"))
+    findings = _errors(lint(d), "encut")
+    assert findings and "274.6" in findings[0]["message"]
+
+
+def test_encut_at_exactly_the_enmax_passes(tmp_path):
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_enmax(d / "POTCAR", [("PAW_PBE K_pv 17Jan2003", 400.0),
+                                 ("PAW_PBE Ti_sv 07Sep2000", 400.0)])
+    assert _errors(lint(d), "encut") == []
+
+
+def test_volume_relaxation_wants_headroom_over_enmax(tmp_path):
+    incar = INCAR_SINGLE_POINT.replace("IBRION = -1", "IBRION = 2").replace(
+        "NSW = 0", "NSW = 100") + "ISIF = 3\n"
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED, incar=incar)
+    _potcar_enmax(d / "POTCAR", [("PAW_PBE K_pv 17Jan2003", 350.0),
+                                 ("PAW_PBE Ti_sv 07Sep2000", 350.0)])
+    warned = _warnings(lint(d), "encut")
+    assert warned and "1.3" in warned[0]["message"]
+
+
+def test_magmom_of_the_wrong_length_is_an_error(tmp_path):
+    """VASP reads MAGMOM positionally, so a short list misassigns every later atom."""
+    incar = INCAR_SINGLE_POINT.replace("ISPIN = 1", "") + "ISPIN = 2\nMAGMOM = 3*1.0\n"
+    d = _run_dir(tmp_path, incar=incar)           # the POSCAR has 2 atoms
+    assert _errors(lint(d), "spin")
+    good = INCAR_SINGLE_POINT + "ISPIN = 2\nMAGMOM = 2*1.0\n"
+    (d / "INCAR").write_text(good)
+    assert _errors(lint(d), "spin") == []
+
+
+def test_magmom_written_out_atom_by_atom_is_counted_too(tmp_path):
+    incar = INCAR_SINGLE_POINT + "ISPIN = 2\nMAGMOM = 1.0 1.0 1.0\n"
+    d = _run_dir(tmp_path, incar=incar)
+    assert _errors(lint(d), "spin")
+
+
+def test_ldau_with_too_low_lmaxmix_is_an_error(tmp_path):
+    incar = INCAR_SINGLE_POINT + "LDAU = .TRUE.\nLMAXMIX = 2\n"
+    d = _run_dir(tmp_path, incar=incar)
+    assert _errors(lint(d), "ldau")
+    (d / "INCAR").write_text(INCAR_SINGLE_POINT + "LDAU = .TRUE.\nLMAXMIX = 4\n")
+    assert _errors(lint(d), "ldau") == []
+
+
+def test_a_band_without_its_image_directories_is_an_error(tmp_path):
+    incar = INCAR_SINGLE_POINT.replace("IBRION = -1", "IBRION = 3").replace(
+        "NSW = 0", "NSW = 100") + "IMAGES = 3\nSPRING = -5.0\nICHAIN = 0\n"
+    d = _run_dir(tmp_path, incar=incar)
+    result = lint(d)
+    assert result["run_type"] == "neb"
+    findings = _errors(result, "neb")
+    assert findings and "00..04" in findings[0]["message"]
+    for name in ("00", "01", "02", "03", "04"):
+        (d / name).mkdir()
+        (d / name / "POSCAR").write_text(POSCAR_VASP5)
+    assert _errors(lint(d), "neb") == []
+
+
+def test_a_negative_poscar_scale_is_read_as_a_volume(tmp_path):
+    """A negative scale factor means "target volume" and must not crash the parser."""
+    poscar = POSCAR_VASP5.replace(" 1.0000000000000000", "-1000.0000000000000000")
+    d = _run_dir(tmp_path, poscar=poscar)
+    assert _errors(lint(d), "poscar") == []
+
+
+def test_vasp6_only_tags_do_not_confuse_the_run_type(tmp_path):
+    """ML_LMLFF and friends are unknown here but must not change the verdict."""
+    incar = INCAR_SINGLE_POINT + "ML_LMLFF = .FALSE.\nLHYPERFINE = .FALSE.\n"
+    d = _run_dir(tmp_path, incar=incar)
+    result = lint(d)
+    assert result["run_type"] == "single_point"
+    assert result["errors"] == 0

@@ -107,7 +107,8 @@ elf2cube ELFCAR --output elf        # → elf.cube (or elf_up/down for spinpol)
 getPOTCAR -r                        # POTCAR in POSCAR element order
 vasplint ./run                      # exit 0 before anything is queued
 vasplint --site zih --strict ./run  # also require the ZIH filesystem interlock
-vasplint --template templates/ ./run  # compare the INCAR to the template it came from
+vasplint --template templates/ ./run  # where to look for the template it names
+vasplint --outcar ./run               # after the run: did it compute what the INCAR says?
 ```
 
 `tools4vasp.vaspsetup` is the importable side: it builds POSCAR, POTCAR (real
@@ -154,7 +155,7 @@ plotIRC --reactant_dir irc_r/ --product_dir irc_p/ \
 | `poscar2nbands` | Compute the recommended NBANDS for LOBSTER from POSCAR/INCAR/POTCAR. | `poscar2nbands` |
 | `set_vacuum` | Set the total vacuum size in a POSCAR (space below + above the slab). | `set_vacuum 15.0 -f POSCAR -o` |
 | `split_surf_and_mol` | Split an adsorbate-surface complex into surface and molecule structures. | `split_surf_and_mol POSCAR` |
-| `vasplint` | Check an input directory before submitting it: POSCAR/POTCAR alignment, INCAR vs its template, run-type consistency, required `#SBATCH` directives, relative symlinks. | `vasplint --site zih run_*/` |
+| `vasplint` | Check a run directory: POSCAR/POTCAR alignment, ENCUT vs POTCAR ENMAX, INCAR vs its template, run-type consistency, required `#SBATCH` directives, relative symlinks. With `--outcar`, also the INCAR against the parameters VASP reports having used. | `vasplint --site zih run_*/` |
 | `xyz2POSCAR` | Insert molecule from .xyz file into a cell from a POSCAR. | `xyz2POSCAR mol.xyz POSCAR_with_cell` |
 
 ## Post-processing tools

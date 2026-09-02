@@ -56,6 +56,7 @@ __all__ = [
     "parse_incar",
     "patch_runscript",
     "poscar_blocks",
+    "potcar_enmax",
     "read_poscar_blocks",
     "read_titels",
     "rel_symlink",
@@ -523,6 +524,23 @@ def read_titels(potcar_path) -> list[str]:
             if "TITEL" in line:
                 titels.append(line.split("=", 1)[1].strip())
     return titels
+
+
+def potcar_enmax(potcar_path) -> list[tuple[str, float]]:
+    """``[(TITEL, ENMAX), ...]`` for every dataset in a POTCAR, in file order.
+
+    ENMAX is the cutoff each pseudopotential was generated for. VASP's own
+    guidance is ENCUT >= max(ENMAX), and 1.3 x that for anything where the basis
+    set has to stay balanced as the cell changes.
+    """
+    text = Path(potcar_path).read_text(errors="replace")
+    titels = re.findall(r"TITEL\s*=\s*(.+)", text)
+    enmax = re.findall(r"ENMAX\s*=\s*([0-9.]+)", text)
+    if len(titels) != len(enmax):
+        raise VaspSetupError(
+            f"{potcar_path}: {len(titels)} TITEL lines but {len(enmax)} ENMAX "
+            "values, so they cannot be paired")
+    return [(titel.strip(), float(value)) for titel, value in zip(titels, enmax)]
 
 
 def split_potcar(potcar_path) -> list[tuple[str, str]]:
