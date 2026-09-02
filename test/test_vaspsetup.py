@@ -22,6 +22,7 @@ from tools4vasp.vaspsetup import (
     forbidden_tags,
     incar_provenance,
     link_potcar,
+    normalise_overrides,
     parse_incar,
     patch_runscript,
     poscar_blocks,
@@ -235,8 +236,10 @@ def test_template_fingerprint_ignores_comments_but_not_values(tmp_path):
 
 
 def test_render_incar_replaces_in_place_and_keeps_comment(template, tmp_path):
+    """The template's own comment survives verbatim, spacing included."""
     out = tmp_path / "INCAR"
-    changes = render_incar(template, out, overrides={"ENCUT": "500"})
+    changes = render_incar(template, out,
+                           overrides={"ENCUT": ("500", "converged for this system")})
     assert changes == ["ENCUT: 400 -> 500"]
     text = out.read_text()
     assert "ENCUT = 500 #PW cutoff" in text
@@ -245,7 +248,7 @@ def test_render_incar_replaces_in_place_and_keeps_comment(template, tmp_path):
 
 def test_render_incar_overriding_one_tag_keeps_its_line_mate(template, tmp_path):
     out = tmp_path / "INCAR"
-    render_incar(template, out, overrides={"NELM": "60"})
+    render_incar(template, out, overrides={"NELM": ("60", "cap the SCF cycle")})
     tags = parse_incar(out)
     assert tags["NELM"] == "60"
     assert tags["EDIFF"] == "1.00e-06"     # the tag sharing the line survives
@@ -253,18 +256,67 @@ def test_render_incar_overriding_one_tag_keeps_its_line_mate(template, tmp_path)
 
 def test_render_incar_appends_absent_tags(template, tmp_path):
     out = tmp_path / "INCAR"
-    changes = render_incar(template, out, overrides={"LDIPOL": ".TRUE."})
+    changes = render_incar(template, out,
+                           overrides={"LDIPOL": (".TRUE.", "slab dipole correction")})
     assert "LDIPOL: (absent) -> .TRUE." in changes
     assert parse_incar(out)["LDIPOL"] == ".TRUE."
+    assert "LDIPOL = .TRUE." in out.read_text().splitlines()[-1]
 
 
 def test_render_incar_writes_readable_provenance(template, tmp_path):
     out = tmp_path / "INCAR"
-    render_incar(template, out, overrides={"NSW": "11", "IBRION": "11"})
+    render_incar(template, out, overrides={"NSW": ("11", "eleven structures"),
+                                           "IBRION": ("11", "interactive walk")})
     provenance = incar_provenance(out)
     assert provenance["template"] == "INCAR.template"
     assert provenance["overrides"] == ["IBRION", "NSW"]
     assert provenance["sha256"] == template_fingerprint(template)
+    assert provenance["reasons"] == {"IBRION": "interactive walk",
+                                     "NSW": "eleven structures"}
+
+
+def test_render_incar_header_is_summary_then_one_reason_per_change(template, tmp_path):
+    out = tmp_path / "INCAR"
+    render_incar(template, out,
+                 overrides={"NSW": ("11", "eleven structures"),
+                            "IBRION": ("11", "interactive walk")},
+                 extra_comment="job note")
+    lines = out.read_text().splitlines()
+    assert lines[0].startswith("# tools4vasp: template=INCAR.template")
+    assert "overrides=IBRION,NSW" in lines[0]
+    assert lines[1] == "# IBRION = 11 (was -1): interactive walk"
+    assert lines[2] == "# NSW = 11 (was 0): eleven structures"
+    assert lines[3] == "# job note"
+    assert not lines[4].startswith("#")          # the template body starts here
+
+
+def test_render_incar_refuses_an_override_without_a_reason(template, tmp_path):
+    out = tmp_path / "INCAR"
+    with pytest.raises(VaspSetupError, match="needs a one-line reason"):
+        render_incar(template, out, overrides={"NSW": "11"})
+    assert not out.exists()
+
+
+def test_render_incar_refuses_a_multiline_reason(template, tmp_path):
+    with pytest.raises(VaspSetupError, match="single line"):
+        render_incar(template, tmp_path / "INCAR",
+                     overrides={"NSW": ("11", "because\nof reasons")})
+
+
+def test_normalise_overrides_rejects_a_malformed_pair():
+    with pytest.raises(VaspSetupError, match=r"\(value, reason\)"):
+        normalise_overrides({"NSW": ("11", "why", "extra")})
+
+
+def test_render_incar_records_an_override_that_changes_nothing(template, tmp_path):
+    """A declared override is a statement of intent, not a diff."""
+    out = tmp_path / "INCAR"
+    changes = render_incar(template, out,
+                           overrides={"ENCUT": ("400", "matches the template")})
+    assert changes == []
+    assert "# ENCUT = 400 (unchanged): matches the template" in out.read_text()
+    assert incar_provenance(out)["overrides"] == ["ENCUT"]
+    assert incar_provenance(out)["reasons"]["ENCUT"] == "matches the template"
 
 
 def test_incar_provenance_absent_returns_none(tmp_path):
@@ -273,11 +325,15 @@ def test_incar_provenance_absent_returns_none(tmp_path):
     assert incar_provenance(path) is None
 
 
-def test_render_incar_does_not_stack_provenance_lines(template, tmp_path):
+def test_render_incar_does_not_stack_headers(template, tmp_path):
+    """Re-rendering replaces the header instead of accumulating one per pass."""
     first, second = tmp_path / "INCAR", tmp_path / "INCAR2"
-    render_incar(template, first, overrides={"ENCUT": "500"})
-    render_incar(first, second, overrides={"ENCUT": "600"})
-    assert second.read_text().count("tools4vasp:") == 1
+    render_incar(template, first, overrides={"ENCUT": ("500", "first pass")})
+    render_incar(first, second, overrides={"ENCUT": ("600", "second pass")})
+    text = second.read_text()
+    assert text.count("tools4vasp:") == 1
+    assert text.count("(was ") == 1
+    assert "second pass" in text and "first pass" not in text
 
 
 def test_render_incar_refuses_neb_template_for_single_point(tmp_path):
@@ -589,7 +645,9 @@ def test_continuation_dir_refuses_empty_contcar(tmp_path):
 def test_continuation_dir_applies_incar_overrides(tmp_path):
     src = _finished_run(tmp_path)
     dest = tmp_path / "run2"
-    continuation_dir(src, dest, incar_overrides={"NSW": "50", "IBRION": "2"})
+    continuation_dir(src, dest, incar_overrides={
+        "NSW": ("50", "continue the relaxation"),
+        "IBRION": ("2", "conjugate gradient for the restart")})
     tags = parse_incar(dest / "INCAR")
     assert tags["NSW"] == "50" and tags["IBRION"] == "2"
     assert incar_provenance(dest / "INCAR")["overrides"] == ["IBRION", "NSW"]

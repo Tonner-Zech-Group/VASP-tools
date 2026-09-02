@@ -141,6 +141,18 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
         tags = parse_incar(incar_path)
         if not tags:
             findings.append(_finding("incar", "error", "INCAR assigns no tags"))
+    provenance = incar_provenance(incar_path) if incar_path.exists() else None
+    if provenance is not None:
+        declared = {tag.upper() for tag in provenance["overrides"]}
+        unexplained = sorted(declared - set(provenance.get("reasons", {})))
+        if unexplained:
+            findings.append(_finding(
+                "template", "error",
+                f"{len(unexplained)} declared override(s) have no reason line in "
+                f"the INCAR header: {', '.join(unexplained)}. Every deviation from "
+                "the template is a decision and has to say why, on one line under "
+                "the summary line"))
+
     detected = run_type or (infer_run_type(tags) if tags else None)
     if detected is None:
         skipped.append("run_type: no INCAR tags, so every run-type dependent "
@@ -321,7 +333,6 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
 
     # ── INCAR against its template ──────────────────────────────────────────
     if tags and template_dir:
-        provenance = incar_provenance(incar_path)
         if provenance is None:
             findings.append(_finding(
                 "template", "warning",
