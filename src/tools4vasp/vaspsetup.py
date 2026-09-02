@@ -51,6 +51,7 @@ __all__ = [
     "forbidden_tags",
     "incar_provenance",
     "link_potcar",
+    "normalise_overrides",
     "parse_incar",
     "patch_runscript",
     "poscar_blocks",
@@ -110,6 +111,12 @@ _PROVENANCE_RE = re.compile(
     r"^#\s*tools4vasp:\s*template=(?P<template>\S+)\s+"
     r"sha256=(?P<sha256>[0-9a-f]+)"
     r"(?:\s+overrides=(?P<overrides>\S*))?\s*$"
+)
+#: One reason line per change, written directly under the summary line:
+#: ``# TAG = new (was old): reason``
+_REASON_RE = re.compile(
+    r"^#\s*(?P<tag>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.*?)\s*"
+    r"\((?:was\s+(?P<old>[^)]*)|unchanged)\):\s*(?P<reason>.+?)\s*$"
 )
 #: extension -> getPOTCAR.sh flag. ``None`` means "recommended defaults".
 _PP_FLAG = {
@@ -333,15 +340,60 @@ def check_run_type(tags: dict[str, str], run_type: str) -> list[str]:
     return problems
 
 
+def normalise_overrides(overrides) -> dict:
+    """Validate overrides and split them into ``{TAG: (value, reason)}``.
+
+    An override may be given as ``(value, reason)`` or, only when no reason is
+    meaningful, as a bare value. A reason is **required**: the whole point of
+    recording it is that a value deviating from the template is a decision, and
+    an undocumented decision is the thing this module exists to prevent. Reasons
+    must be a single line, because they are written as INCAR comments.
+    """
+    parsed, missing = {}, []
+    for tag, spec in dict(overrides or {}).items():
+        tag = tag.upper()
+        if isinstance(spec, (tuple, list)):
+            if len(spec) != 2:
+                raise VaspSetupError(
+                    f"override {tag} must be (value, reason), got {spec!r}")
+            value, reason = str(spec[0]), str(spec[1]).strip()
+        else:
+            value, reason = str(spec), ""
+        if not reason:
+            missing.append(tag)
+        if "\n" in reason or "\r" in reason:
+            raise VaspSetupError(
+                f"the reason for {tag} must be a single line, got {reason!r}")
+        parsed[tag] = (value, reason)
+    if missing:
+        raise VaspSetupError(
+            "every override needs a one-line reason, which is written into the "
+            "INCAR header; missing for: " + ", ".join(sorted(missing))
+            + "\n  pass overrides={\"TAG\": (value, \"why\")}")
+    return parsed
+
+
 def render_incar(template, out_path, overrides=None, run_type=None,
                  extra_comment=None):
     """Write ``out_path`` from ``template``, applying ``overrides``.
 
-    ``overrides`` maps upper-case tags to their new value as a string. A tag
-    already in the template is replaced in place, keeping its position and its
-    trailing comment; a tag the template lacks is appended under a marked
-    block. The first line of the result is a provenance comment naming the
-    template, its fingerprint and the overridden tags.
+    ``overrides`` maps an upper-case tag to ``(value, reason)``. Every override
+    needs a one-line reason; see :func:`normalise_overrides`.
+
+    **The template's own comments are left exactly as they are.** A tag whose
+    value is replaced keeps its trailing comment verbatim, including its
+    spacing: an INCAR comment describes what a tag does, and rewriting it to
+    explain one job's choice is what the header is for. A tag the template lacks
+    is appended bare.
+
+    The result is headed by a summary line naming the template, its fingerprint
+    and every changed tag, followed by one line per change giving its reason:
+
+    .. code-block:: none
+
+        # tools4vasp: template=INCAR.template sha256=483da4794b03 overrides=IBRION,NSW
+        # IBRION = 11 (was -1): interactive mode walks the series in one process
+        # NSW = 11 (unchanged): must be at least the number of structures
 
     If ``run_type`` is given the *result* is validated with
     :func:`check_run_type` and nothing is written when it does not fit. In
@@ -354,11 +406,12 @@ def render_incar(template, out_path, overrides=None, run_type=None,
     template = Path(template)
     if not template.is_file():
         raise VaspSetupError(f"INCAR template not found: {template}")
-    overrides = {k.upper(): str(v) for k, v in dict(overrides or {}).items()}
+    overrides = normalise_overrides(overrides)
 
     lines = template.read_text(errors="replace").splitlines()
-    lines = [ln for ln in lines if not _PROVENANCE_RE.match(ln)]
-    changes, seen = [], set()
+    lines = [ln for ln in lines
+             if not _PROVENANCE_RE.match(ln) and not _REASON_RE.match(ln)]
+    changes, previous = [], {}
 
     for i, line in enumerate(lines):
         code, comment = _split_code_comment(line)
@@ -368,22 +421,24 @@ def render_incar(template, out_path, overrides=None, run_type=None,
             if tag is None or tag not in overrides:
                 continue
             old = segment.split("=", 1)[1].strip()
-            new = overrides[tag]
-            seen.add(tag)
+            new = overrides[tag][0]
+            previous[tag] = old
             if old != new:
                 indent = segment[:len(segment) - len(segment.lstrip())]
-                segments[j] = f"{indent}{tag} = {new}"
+                trailing = segment[len(segment.rstrip()):]
+                segments[j] = f"{indent}{tag} = {new}{trailing}"
                 changes.append(f"{tag}: {old} -> {new}")
                 touched = True
         if touched:
-            lines[i] = ";".join(segments).rstrip() + (f" {comment}" if comment else "")
+            # `comment` still carries its own leading whitespace, so the
+            # template's spacing survives untouched.
+            lines[i] = ";".join(segments) + comment
 
-    missing = [t for t in overrides if t not in seen]
-    if missing:
-        lines += ["", "# --- overrides applied by tools4vasp.vaspsetup ---"]
-        for tag in missing:
-            lines.append(f"{tag} = {overrides[tag]}")
-            changes.append(f"{tag}: (absent) -> {overrides[tag]}")
+    for tag, (value, _) in overrides.items():
+        if tag not in previous:
+            previous[tag] = "absent"
+            lines.append(f"{tag} = {value}")
+            changes.append(f"{tag}: (absent) -> {value}")
 
     result = "\n".join(lines) + "\n"
     if run_type is not None:
@@ -400,6 +455,13 @@ def render_incar(template, out_path, overrides=None, run_type=None,
         f"sha256={template_fingerprint(template)} "
         f"overrides={','.join(sorted(overrides)) if overrides else '-'}"
     )]
+    for tag in sorted(overrides):
+        value, reason = overrides[tag]
+        # "unchanged" rather than "(was 11)" when the template already had the
+        # value: a declared override is a statement of intent, and saying it
+        # changed nothing is more useful than repeating the number.
+        was = "unchanged" if previous[tag] == value else f"was {previous[tag]}"
+        header.append(f"# {tag} = {value} ({was}): {reason}")
     if extra_comment:
         header.append(f"# {extra_comment}")
     Path(out_path).write_text("\n".join(header) + "\n" + result)
@@ -407,20 +469,28 @@ def render_incar(template, out_path, overrides=None, run_type=None,
 
 
 def incar_provenance(path) -> dict | None:
-    """Read back the provenance comment :func:`render_incar` wrote.
+    """Read back the header :func:`render_incar` wrote.
 
-    Returns ``{"template": str, "sha256": str, "overrides": [tags]}`` or None if
-    the INCAR carries no such line, which means it was not built by this module.
+    Returns ``{"template", "sha256", "overrides": [tags], "reasons": {tag: str}}``
+    or None if the INCAR carries no summary line, which means it was not built
+    by this module.
     """
+    found, reasons = None, {}
     for line in Path(path).read_text(errors="replace").splitlines():
         match = _PROVENANCE_RE.match(line)
-        if match:
+        if match and found is None:
             raw = match.group("overrides") or ""
-            overrides = [t for t in raw.split(",") if t and t != "-"]
-            return {"template": match.group("template"),
-                    "sha256": match.group("sha256"),
-                    "overrides": overrides}
-    return None
+            found = {"template": match.group("template"),
+                     "sha256": match.group("sha256"),
+                     "overrides": [t for t in raw.split(",") if t and t != "-"]}
+            continue
+        reason = _REASON_RE.match(line)
+        if reason:
+            reasons[reason.group("tag").upper()] = reason.group("reason")
+    if found is None:
+        return None
+    found["reasons"] = reasons
+    return found
 
 
 # ── POTCAR ──────────────────────────────────────────────────────────────────

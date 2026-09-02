@@ -362,14 +362,16 @@ def _template_dir(tmp_path, incar=INCAR_SINGLE_POINT, kpoints=KPOINTS):
 def test_declared_override_passes_the_template_check(tmp_path):
     templates = _template_dir(tmp_path)
     d = _run_dir(tmp_path)
-    render_incar(templates / "INCAR.template", d / "INCAR", overrides={"ENCUT": "500"})
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
     assert lint(d, template=templates)["findings"] == []
 
 
 def test_undeclared_hand_edit_is_caught(tmp_path):
     templates = _template_dir(tmp_path)
     d = _run_dir(tmp_path)
-    render_incar(templates / "INCAR.template", d / "INCAR", overrides={"ENCUT": "500"})
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
     text = (d / "INCAR").read_text().replace("EDIFF = 1.00e-06", "EDIFF = 1.00e-04")
     (d / "INCAR").write_text(text)
     findings = _errors(lint(d, template=templates), "template")
@@ -412,7 +414,7 @@ def test_dipole_tag_only_on_one_side_warns(tmp_path):
     assert not (templates / "INCAR").exists()
     d = _run_dir(tmp_path)
     render_incar(templates / "INCAR.template", d / "INCAR",
-                 overrides={"LDIPOL": ".TRUE."})
+                 overrides={"LDIPOL": (".TRUE.", "slab dipole correction")})
     assert _warnings(lint(d, template=templates), "dipole")
 
 
@@ -482,3 +484,25 @@ def test_main_handles_several_directories(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert len(payload) == 2
     assert exc.value.code == 1
+
+
+def test_declared_override_without_a_reason_line_is_caught(tmp_path):
+    """A hand-stripped reason line means an undocumented decision."""
+    templates = _template_dir(tmp_path)
+    d = _run_dir(tmp_path)
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
+    kept = [ln for ln in (d / "INCAR").read_text().splitlines()
+            if not ln.startswith("# ENCUT")]
+    (d / "INCAR").write_text("\n".join(kept) + "\n")
+    findings = _errors(lint(d), "template")
+    assert findings and "no reason line" in findings[0]["message"]
+
+
+def test_reason_lines_are_checked_without_a_template(tmp_path):
+    """The header is self-contained, so this check does not need --template."""
+    templates = _template_dir(tmp_path)
+    d = _run_dir(tmp_path)
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
+    assert lint(d)["findings"] == []
