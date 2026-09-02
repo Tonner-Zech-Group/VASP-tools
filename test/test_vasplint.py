@@ -506,3 +506,53 @@ def test_reason_lines_are_checked_without_a_template(tmp_path):
     render_incar(templates / "INCAR.template", d / "INCAR",
                  overrides={"ENCUT": ("500", "converged for this system")})
     assert lint(d)["findings"] == []
+
+
+# ---------------------------------------------------------------------------
+# PAW potential suffixes (Copilot review on PR #30)
+# ---------------------------------------------------------------------------
+
+POSCAR_SUFFIXED = """\
+K Ti
+ 1.0000000000000000
+    10.0000000000000000    0.0000000000000000    0.0000000000000000
+     0.0000000000000000   10.0000000000000000    0.0000000000000000
+     0.0000000000000000    0.0000000000000000   10.0000000000000000
+ K   Ti
+  1   1
+Direct
+  0.0000000000000000  0.0000000000000000  0.0000000000000000
+  0.1000000000000000  0.0000000000000000  0.0000000000000000
+"""
+
+SUFFIXED_TITELS = ("PAW_PBE K_pv 17Jan2003", "PAW_PBE Ti_sv 07Sep2000")
+
+
+def _potcar_titels(path, titels):
+    path.write_text("".join(
+        f" {t}\n   4.0\n parameters from PSCTR are:\n   TITEL  = {t}\n"
+        "End of Dataset\n" for t in titels))
+    return path
+
+
+def test_suffixed_potcar_is_not_reported_as_a_mismatch(tmp_path):
+    """K_pv against a POSCAR saying K is correct, not a false order mismatch."""
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_titels(d / "POTCAR", SUFFIXED_TITELS)
+    assert _errors(lint(d), "potcar") == []
+
+
+def test_suffixed_potcar_in_the_wrong_order_is_still_caught(tmp_path):
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_titels(d / "POTCAR", tuple(reversed(SUFFIXED_TITELS)))
+    assert _errors(lint(d), "potcar")
+
+
+def test_expected_titels_still_pin_the_exact_suffixed_potential(tmp_path):
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_titels(d / "POTCAR", SUFFIXED_TITELS)
+    clean = lint(d, expected_titels={"K": "PAW_PBE K_pv 17Jan2003",
+                                     "Ti": "PAW_PBE Ti_sv 07Sep2000"})
+    assert _errors(clean, "potcar_provenance") == []
+    swapped = lint(d, expected_titels={"Ti": "PAW_PBE Ti 08Apr2002"})
+    assert _errors(swapped, "potcar_provenance")
