@@ -393,6 +393,30 @@ def test_incar_without_provenance_warns_when_a_template_is_given(tmp_path):
     assert _warnings(lint(d, template=templates), "template")
 
 
+def test_a_built_incar_with_no_template_configured_warns(tmp_path):
+    """The strongest check must never read as a silent pass (council 2026-09-02)."""
+    templates = _template_dir(tmp_path)
+    d = _run_dir(tmp_path)
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
+    result = lint(d)                       # no --template, no env
+    warned = _warnings(result, "template")
+    assert warned and "not checked" in warned[0]["message"]
+    assert not any("template" in note for note in result["skipped"])
+
+
+def test_templates_can_come_from_the_environment(tmp_path, monkeypatch):
+    templates = _template_dir(tmp_path)
+    d = _run_dir(tmp_path)
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
+    monkeypatch.setenv("VASPLINT_TEMPLATES", str(templates))
+    assert lint(d)["findings"] == []
+    text = (d / "INCAR").read_text().replace("EDIFF = 1.00e-06", "EDIFF = 1.00e-04")
+    (d / "INCAR").write_text(text)
+    assert _errors(lint(d), "template")    # and it now actually fires
+
+
 def test_unknown_template_name_is_an_error(tmp_path):
     templates = _template_dir(tmp_path)
     d = _run_dir(tmp_path)
@@ -505,7 +529,7 @@ def test_reason_lines_are_checked_without_a_template(tmp_path):
     d = _run_dir(tmp_path)
     render_incar(templates / "INCAR.template", d / "INCAR",
                  overrides={"ENCUT": ("500", "converged for this system")})
-    assert lint(d)["findings"] == []
+    assert _errors(lint(d), "template") == []
 
 
 # ---------------------------------------------------------------------------
@@ -556,3 +580,24 @@ def test_expected_titels_still_pin_the_exact_suffixed_potential(tmp_path):
     assert _errors(clean, "potcar_provenance") == []
     swapped = lint(d, expected_titels={"Ti": "PAW_PBE Ti 08Apr2002"})
     assert _errors(swapped, "potcar_provenance")
+
+
+def test_a_self_contained_directory_verifies_with_no_configuration(tmp_path):
+    """A copy of the template inside the run dir makes the check travel."""
+    templates = _template_dir(tmp_path)
+    d = _run_dir(tmp_path)
+    render_incar(templates / "INCAR.template", d / "INCAR",
+                 overrides={"ENCUT": ("500", "converged for this system")})
+    (d / "INCAR.template").write_text((templates / "INCAR.template").read_text())
+    assert lint(d)["findings"] == []
+    text = (d / "INCAR").read_text().replace("EDIFF = 1.00e-06", "EDIFF = 1.00e-04")
+    (d / "INCAR").write_text(text)
+    assert _errors(lint(d), "template")
+
+
+def test_the_run_directory_kpoints_is_not_compared_against_itself(tmp_path):
+    templates = _template_dir(tmp_path, kpoints="auto\n0\nGamma\n4 4 1\n0 0 0\n")
+    d = _run_dir(tmp_path)
+    render_incar(templates / "INCAR.template", d / "INCAR")
+    (d / "INCAR.template").write_text((templates / "INCAR.template").read_text())
+    assert _errors(lint(d, template=templates), "kpoints")   # 2x2x1 vs 4x4x1

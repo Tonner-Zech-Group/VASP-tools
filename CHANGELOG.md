@@ -2,6 +2,11 @@
 
 ## [1.4.0] - 2026-09-01
 
+### Bug Fixes
+
+- **Packaging** — the wheel and sdist now contain `bash_scripts/*.sh`. They previously shipped only `bash_scripts/__init__.py`, so every console script that shells out to a shell script (`getPOTCAR`, `replace_potcar_symlinks`, `calc-deformation-density`, `plot_neb_movie`) was broken for anyone who installed from PyPI rather than from a checkout. Verified by building both artifacts and installing the wheel: all five scripts present, mode 0755.
+- **CI** — `python-app.yml` now runs on every pull request, not only those targeting `main`. A pull request stacked on another feature branch previously received no checks at all, which on this repository matters because merging to `main` auto-publishes a release.
+
 ### New Tools
 
 - **`vasplint`** — Check a VASP input directory *before* it is submitted, the pre-run counterpart to `vaspcheck`. Validates POSCAR/POTCAR species-block alignment (symlinks resolved, both VASP 4 and VASP 5 POSCARs), pseudopotential provenance, selective-dynamics blocks in fixed-geometry runs, transition-state tags left in an ordinary INCAR, `IBRION`/`NSW`/`INTERACTIVE`/`ISIF` consistency per run type, the interactive-mode structure count against `NSW`, `ICHARG` against a missing CHGCAR, k-mesh against a template, `KPAR` against the mesh size, `NCORE * KPAR` against the requested rank count, required `#SBATCH` directives (site rules opt-in via `--site`), continuation runs whose source is still writing its CONTCAR, and that every symlink is relative and resolves. Any check whose input is missing reports itself as skipped instead of passing quietly. `--json` for scripting, `--strict` to fail on warnings.
@@ -12,7 +17,7 @@
 
 ### Other
 
-- **`skills/vasp/`** — An agent skill shipped with the repository, plus a commented group-default INCAR and a generic job-script template. Values that are per-system decisions are marked as such rather than presented as defaults.
+- **`skills/vasp/`** — An agent skill shipped with the repository (deliberately repository content, not wheel content: it is consumed from a checkout and can therefore be revised without cutting a release), plus a commented group-default INCAR and a generic job-script template. Values that are per-system decisions are marked as such rather than presented as defaults.
 
 ## [1.3.1] - 2026-06-11
 
