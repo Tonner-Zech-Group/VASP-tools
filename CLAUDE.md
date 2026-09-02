@@ -114,10 +114,22 @@ Key points:
 
 ### Releasing a new version
 
-1. In the feature branch, bump `version` in `pyproject.toml` and `CITATION.cff`
-   (also update `date-released` in `CITATION.cff`).
-2. Merge the PR to `main`.
-3. `tag-on-merge.yml` creates tag `v<version>` → `release.yml` builds the
+1. In the feature branch, add a `## [<version>] - <YYYY-MM-DD>` section to
+   `CHANGELOG.md` covering everything the release will contain. Update the
+   branch against the latest `main` first, then list the contents with
+   `git log v<previous>..HEAD` — that covers both what has landed on `main`
+   since the tag and this branch's own commits, and all of it ships once the
+   branch merges. Do not use `git log v<previous>..main`: it omits the branch's
+   own commits. Every released version needs an entry, even a docs/metadata-only
+   one. Re-check immediately before merging — `git log HEAD..origin/main` must
+   be empty, or another PR has landed on `main` in the meantime and joined
+   *this* release, since the tag is cut from `main`, not from the branch.
+2. Bump `version` in `pyproject.toml` and `CITATION.cff`, and set
+   `date-released` in `CITATION.cff` to the same date as the changelog heading
+   — i.e. the expected merge date, since the tag is cut on merge. If the merge
+   slips to another day, re-sync both dates before merging.
+3. Merge the PR to `main`.
+4. `tag-on-merge.yml` creates tag `v<version>` → `release.yml` builds the
    wheel, creates a GitHub Release, and publishes to PyPI via trusted publisher.
 
 ### PyPI / TestPyPI trusted publisher (one-time setup)
@@ -161,13 +173,3 @@ Optional (not installed in CI):
 - `geodesic-interpolate` — required by `mixed_interpolate`
 - VMD — required by `plot_neb_movie` / `visualize_magnetization`
 - LaTeX/pgf — required by `plotIRC` for publication-quality figures
-
-## Environment notes (this dev container)
-
-```bash
-# SSH agent is available at /ssh-agent
-SSH_AUTH_SOCK=/ssh-agent git push
-
-# Add GitHub to known hosts if needed
-ssh-keyscan github.com >> ~/.ssh/known_hosts
-```
