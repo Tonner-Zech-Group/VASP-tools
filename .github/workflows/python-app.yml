@@ -5,8 +5,10 @@ name: Basic tests
 on:
   push:
     branches: [ "main" ]
+  # Every pull request, not only those targeting main: a stacked pull request
+  # (based on another feature branch) otherwise gets no checks at all, and on
+  # this repository merging to main auto-publishes a release.
   pull_request:
-    branches: [ "main" ]
 
 permissions:
   contents: read

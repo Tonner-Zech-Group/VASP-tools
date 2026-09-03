@@ -1,0 +1,786 @@
+#!/usr/bin/env python3
+"""Check a VASP input directory *before* it is submitted.
+
+:mod:`tools4vasp.vaspcheck` and :mod:`tools4vasp.outcar_convergence` inspect a
+calculation that already ran. This module inspects one that has not, which is
+where a mistake is still free: a wrong POTCAR order, a transition-state tag left
+in a single-point INCAR or a missing filesystem interlock costs nothing on disk
+and a whole walltime once queued.
+
+It is deliberately usable with no arguments (``vasplint``): the run type is
+inferred from the INCAR, and every check that needs something the directory does
+not have reports itself as skipped rather than silently passing. Findings carry
+a level, ``error`` or ``warning``; the exit status is non-zero when any error was
+found, or with ``--strict`` when any warning was.
+
+Pass ``--template`` to also verify an INCAR against the template it was built
+from, using the provenance comment :func:`tools4vasp.vaspsetup.render_incar`
+writes into it.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+from tools4vasp.vaspsetup import (
+    REQUIRED_SBATCH,
+    SITE_SBATCH,
+    VaspSetupError,
+    check_run_type,
+    count_interactive_structures,
+    element_of_titel,
+    incar_provenance,
+    parse_incar,
+    potcar_enmax,
+    read_poscar_blocks,
+    read_titels,
+    template_fingerprint,
+)
+
+__all__ = ["compare_incar_to_outcar", "infer_run_type", "lint", "main",
+           "outcar_effective_tags", "run"]
+
+#: ALGO name -> the IALGO code VASP echoes for it. VASP never echoes ALGO by
+#: name, so this is the only way to verify it.
+_ALGO_TO_IALGO = {"NORMAL": "38", "VERYFAST": "48", "FAST": "68", "ALL": "58",
+                  "DAMPED": "53"}
+
+#: Tags VASP 5.4.4 reports nowhere, established by reading a real OUTCAR rather
+#: than assumed. A declared override among these cannot be verified after the
+#: fact; one *outside* this set that is also missing is suspicious, because VASP
+#: silently ignores tags it does not recognise.
+_NOT_REPORTED = frozenset({
+    "ADDGRID", "INTERACTIVE", "LAECHG", "LPLANE", "LSCALU", "NSIM", "SYMPREC",
+    "NBANDS", "NUPDOWN", "LORBIT", "IMIX", "KSPACING",
+})
+
+#: Tags whose echo cannot be compared literally, with the reason.
+_NOT_LITERAL = {
+    "GGA": "VASP echoes '--' when the functional comes from the POTCAR, which is "
+           "what an explicit PE means for PAW_PBE potentials",
+    "LREAL": "'Auto' resolves to T or F depending on system size, so either echo "
+             "is consistent",
+    "SYSTEM": "free-text label, truncated in the echo",
+}
+
+#: Files that, if present, are read from disk by VASP and must therefore exist
+#: when the INCAR says to read them.
+_DIPOLE_TAGS = ("LDIPOL", "IDIPOL", "DIPOL", "EPSILON")
+
+
+#: Colon-separated template directories, so a caller that does not know which
+#: template a given INCAR came from can still have the check run. The INCAR
+#: names its own template in the header; this only says where to look.
+TEMPLATES_ENV = "VASPLINT_TEMPLATES"
+
+
+def _finding(check, level, message):
+    return {"check": check, "level": level, "message": message}
+
+
+def template_dirs(explicit=None) -> list:
+    """Template directories the caller *configured*, argument first, then the
+    environment.
+
+    The run directory is searched too (see :func:`lint`) but is deliberately not
+    listed here: whether the caller configured anything decides how loudly a
+    missing template is reported.
+    """
+    dirs = []
+    if explicit:
+        dirs += [Path(p) for p in ([explicit] if isinstance(explicit, (str, Path))
+                                   else list(explicit))]
+    dirs += [Path(p) for p in os.environ.get(TEMPLATES_ENV, "").split(os.pathsep) if p]
+    seen, out = set(), []
+    for d in dirs:
+        if d.is_dir() and d.resolve() not in seen:
+            seen.add(d.resolve())
+            out.append(d)
+    return out
+
+
+def _find_template(name, dirs):
+    for d in dirs:
+        candidate = d / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def infer_run_type(tags: dict) -> str:
+    """Guess the run type from an INCAR's tags.
+
+    Order matters: an interactive run also has ``NSW > 0``, and a dimer search
+    also carries optimiser tags, so the most specific marker wins.
+    """
+    if tags.get("INTERACTIVE", "").upper().startswith(".T"):
+        return "interactive"
+    if "IMAGES" in tags:
+        return "neb"
+    if tags.get("ICHAIN", "").strip() == "2":
+        return "dimer"
+    ibrion = tags.get("IBRION", "").strip()
+    nsw = tags.get("NSW", "0").strip()
+    if ibrion == "-1" or nsw in ("0", ""):
+        return "single_point"
+    return "relax"
+
+
+def outcar_effective_tags(text: str) -> dict:
+    """The parameters VASP actually used, read out of an OUTCAR's own echo.
+
+    VASP re-prints the INCAR it ran with, in INCAR syntax (several tags per line
+    separated by ``;``) followed by explanatory prose, so the value is the first
+    token after ``=``. Several quantities are reported elsewhere in the file
+    instead of in that block and are recovered separately: the irreducible
+    k-point count, the band/k-point parallel layout that gives NCORE and KPAR,
+    and the dispersion correction.
+
+    Returns upper-case tag -> value string, plus the derived keys ``NKPTS``,
+    ``_NCORE``, ``_KPAR``.
+    """
+    head = re.split(r"-{20,} Iteration", text, maxsplit=1)[0]
+    tags: dict[str, str] = {}
+    for line in head.splitlines():
+        if "=" not in line:
+            continue
+        for segment in line.split(";"):
+            match = re.match(r"\s*([A-Z][A-Z0-9_]{1,11})\s*=\s*(\S+)", segment)
+            if match:
+                tags.setdefault(match.group(1), match.group(2))
+
+    # Reported outside the parameter block.
+    for key, pattern in (
+        ("NKPTS", r"NKPTS\s*=\s*(\d+)"),
+        ("_NKPTS_IRR", r"Found\s+(\d+)\s+irreducible k-points"),
+        ("_NCORE", r"one band on NCORES_PER_BAND=\s*(\d+)"),
+        ("_KPAR", r"each k-point on\s+\d+\s+cores,\s*(\d+)\s+groups"),
+        ("_RANKS", r"running on\s+(\d+) total cores"),
+        ("IVDW", r"^\s*IVDW\s*=\s*(\d+)"),
+    ):
+        match = re.search(pattern, text, re.MULTILINE)
+        if match:
+            tags[key] = match.group(1)
+    return tags
+
+
+def _norm_bool(value):
+    v = value.strip().upper().strip(".")
+    return {"T": "T", "TRUE": "T", "F": "F", "FALSE": "F"}.get(v)
+
+
+def _as_float(value):
+    try:
+        return float(value.strip().replace("D", "E"))
+    except ValueError:
+        return None
+
+
+def _values_agree(incar_value, outcar_value):
+    """Is the echoed value consistent with what the INCAR asked for?
+
+    Booleans are compared as booleans (``.FALSE.`` against ``F``), numbers
+    numerically with a tolerance taken from the echo's own printed precision
+    (VASP prints BMIX=0.0001 as ``0.00``), and strings case-insensitively
+    allowing the echo to be truncated (``accura`` for ``Accurate``).
+    """
+    incar_value, outcar_value = incar_value.strip(), outcar_value.strip()
+    a, b = _norm_bool(incar_value), _norm_bool(outcar_value)
+    if a and b:
+        return a == b
+    fa, fb = _as_float(incar_value), _as_float(outcar_value)
+    if fa is not None and fb is not None:
+        # Tolerance is half of the echo's own last printed digit, exponent
+        # included: "0.1E-05" is precise to 5e-7, not to 0.05. Without the
+        # exponent the bound would be so loose that EDIFF = 0.04 would pass for
+        # a run that used 1e-6.
+        mantissa, _, exponent = outcar_value.upper().replace("D", "E").partition("E")
+        decimals = len(mantissa.split(".")[1]) if "." in mantissa else 0
+        try:
+            scale = 10.0 ** int(exponent) if exponent else 1.0
+        except ValueError:
+            scale = 1.0
+        tol = max(0.5 * 10 ** (-decimals) * scale, abs(fa) * 1e-9)
+        return abs(fa - fb) <= tol
+    lower_in, lower_out = incar_value.lower(), outcar_value.lower()
+    return lower_in == lower_out or lower_in.startswith(lower_out)
+
+
+def compare_incar_to_outcar(incar_tags, outcar_text, declared=()):
+    """Compare an INCAR against the parameters VASP reports having used.
+
+    This is the check that closes the gap left by a pre-submission linter: it
+    sees post-lint edits, values VASP overrode, and tags VASP silently ignored
+    because they are misspelled. Returns ``(findings, skipped)``.
+    """
+    effective = outcar_effective_tags(outcar_text)
+    if not effective:
+        return ([_finding("outcar", "error",
+                          "no parameter echo found in the OUTCAR; it is truncated "
+                          "or not an OUTCAR")], [])
+    findings, skipped = [], []
+    declared = {tag.upper() for tag in declared}
+
+    for tag, wanted in sorted(incar_tags.items()):
+        if tag in _NOT_LITERAL:
+            skipped.append(f"outcar {tag}: {_NOT_LITERAL[tag]}")
+            continue
+        if tag == "ISTART":
+            # A request, not a setting: ISTART=1 or 2 degrades to 0 when there is
+            # no WAVECAR to read, which is the normal case for the first
+            # structure of an interactive walk. Only a request VASP could not
+            # have lowered is a mismatch.
+            got = effective.get("ISTART")
+            if got is not None and wanted.strip() == "0" and got.strip() != "0":
+                findings.append(_finding(
+                    "outcar", "error",
+                    f"ISTART = 0 in the INCAR but the run started from {got}"))
+            elif got is None:
+                skipped.append("outcar ISTART: not found in the OUTCAR")
+            else:
+                skipped.append(
+                    f"outcar ISTART: requested {wanted}, run used {got.strip()}; "
+                    "VASP lowers it when there is no WAVECAR to read")
+            continue
+        if tag == "ALGO":
+            code = _ALGO_TO_IALGO.get(wanted.strip().upper())
+            got = effective.get("IALGO")
+            if code and got and code != got.strip():
+                findings.append(_finding(
+                    "outcar", "error",
+                    f"ALGO = {wanted} means IALGO = {code}, but the run used "
+                    f"IALGO = {got}"))
+            elif not (code and got):
+                skipped.append("outcar ALGO: no IALGO echo to compare against")
+            continue
+        derived = {"NCORE": "_NCORE", "KPAR": "_KPAR"}.get(tag)
+        got = effective.get(derived) if derived else effective.get(tag)
+        if got is None:
+            if tag in _NOT_REPORTED:
+                skipped.append(f"outcar {tag}: VASP does not report it")
+            elif tag in declared:
+                findings.append(_finding(
+                    "outcar", "warning",
+                    f"{tag} is a declared override but does not appear anywhere in "
+                    "the OUTCAR; VASP silently ignores tags it does not recognise, "
+                    "so check the spelling"))
+            else:
+                skipped.append(f"outcar {tag}: not found in the OUTCAR")
+            continue
+        if not _values_agree(wanted, got):
+            findings.append(_finding(
+                "outcar", "error",
+                f"{tag} = {wanted} in the INCAR but the run used {got}"))
+
+    # Now exact rather than a necessary condition: the OUTCAR states how many
+    # irreducible k-points there actually were.
+    nkpts = effective.get("_NKPTS_IRR") or effective.get("NKPTS")
+    kpar = incar_tags.get("KPAR", "1").strip()
+    if nkpts and kpar.isdigit() and int(kpar) > int(nkpts):
+        findings.append(_finding(
+            "outcar", "error",
+            f"KPAR = {kpar} exceeds the {nkpts} irreducible k-points this run "
+            "actually had"))
+    return findings, skipped
+
+
+def _parse_kpoints_mesh(path):
+    """The automatic mesh of a KPOINTS file, or None if it is not automatic."""
+    lines = Path(path).read_text(errors="replace").splitlines()
+    if len(lines) < 4:
+        return None
+    if not lines[2].strip()[:1].upper() in ("G", "M", "A"):
+        return None
+    tokens = lines[3].split()
+    if len(tokens) < 3 or not all(t.lstrip("+-").isdigit() for t in tokens[:3]):
+        return None
+    return tuple(int(t) for t in tokens[:3])
+
+
+def _sbatch_value(text, flag):
+    """The value of an *active* ``#SBATCH <flag>`` directive, or None."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#SBATCH"):
+            continue
+        body = stripped[len("#SBATCH"):].strip()
+        if body.startswith(flag):
+            value = body[len(flag):].strip()
+            return value.split("#")[0].strip().strip('"').strip("'")
+    return None
+
+
+def _find_job_script(path: Path):
+    """The job script in a run directory, by content rather than by name."""
+    for candidate in sorted(path.glob("*")):
+        if not candidate.is_file():
+            continue
+        if candidate.name in ("INCAR", "POSCAR", "POTCAR", "KPOINTS", "CONTCAR"):
+            continue
+        try:
+            head = candidate.read_text(errors="replace")[:4000]
+        except OSError:
+            continue
+        if "#SBATCH" in head:
+            return candidate
+    return None
+
+
+def lint(path=".", template=None, run_type=None, expected_titels=None,
+         require=(), outcar=False):
+    """Check the VASP input directory ``path``; return findings and context.
+
+    Returns ``{"path", "run_type", "findings", "skipped", "errors", "warnings"}``.
+    Nothing is written and nothing is fixed: this function only reports.
+
+    ``require`` names extra SLURM directives the job script must carry on top of
+    :data:`~tools4vasp.vaspsetup.REQUIRED_SBATCH`, for site rules this package
+    does not impose on everyone (see
+    :data:`~tools4vasp.vaspsetup.SITE_SBATCH`).
+    """
+    path = Path(path)
+    if not path.is_dir():
+        raise VaspSetupError(f"not a directory: {path}")
+    findings, skipped = [], []
+    # The run directory is searched first, so a calculation carrying a copy of
+    # its own template verifies anywhere, including on a compute node where the
+    # project tree is not mounted.
+    configured = template_dirs(template)
+    searched = [path] + configured
+
+    # ── INCAR, and the run type everything else is judged against ───────────
+    incar_path = path / "INCAR"
+    if not incar_path.exists():
+        findings.append(_finding(
+            "incar", "error",
+            "no INCAR in this directory. Note this tool checks directories that "
+            "are about to run; for a finished calculation use vaspcheck and "
+            "vaspcheck-outcar instead"))
+        tags = {}
+    else:
+        tags = parse_incar(incar_path)
+        if not tags:
+            findings.append(_finding("incar", "error", "INCAR assigns no tags"))
+    provenance = incar_provenance(incar_path) if incar_path.exists() else None
+    if provenance is not None:
+        declared = {tag.upper() for tag in provenance["overrides"]}
+        unexplained = sorted(declared - set(provenance.get("reasons", {})))
+        if unexplained:
+            findings.append(_finding(
+                "template", "error",
+                f"{len(unexplained)} declared override(s) have no reason line in "
+                f"the INCAR header: {', '.join(unexplained)}. Every deviation from "
+                "the template is a decision and has to say why, on one line under "
+                "the summary line"))
+
+    detected = run_type or (infer_run_type(tags) if tags else None)
+    if detected is None:
+        skipped.append("run_type: no INCAR tags, so every run-type dependent "
+                       "check is skipped rather than assumed")
+    elif tags:
+        for problem in check_run_type(tags, detected):
+            findings.append(_finding("run_type", "error", problem))
+
+    # ── POSCAR ──────────────────────────────────────────────────────────────
+    blocks, selective = None, False
+    poscar = path / "POSCAR"
+    if not poscar.exists():
+        findings.append(_finding("poscar", "error", "no POSCAR in this directory"))
+    else:
+        try:
+            blocks, selective = read_poscar_blocks(poscar)
+        except VaspSetupError as exc:
+            findings.append(_finding("poscar", "error", str(exc)))
+        if selective and detected in ("single_point", "interactive"):
+            findings.append(_finding(
+                "poscar", "error",
+                f"POSCAR carries a Selective dynamics block, but a "
+                f"{detected} run does not move the atoms it would constrain; "
+                "ASE's VASP reader also propagates such constraints to "
+                "neighbouring structures"))
+
+    # ── POTCAR, symlinks resolved ───────────────────────────────────────────
+    potcar = path / "POTCAR"
+    if not potcar.exists():
+        findings.append(_finding(
+            "potcar", "error",
+            "no POTCAR" + (" (dangling symlink)" if potcar.is_symlink() else "")))
+    elif blocks is not None:
+        titels = read_titels(potcar)
+        wanted = [element for element, _ in blocks]
+        # Bare symbols: a POSCAR species line has no PAW suffix, so comparing
+        # "Ti_sv" against "Ti" would be a false mismatch.
+        got = [element_of_titel(t) for t in titels]
+        if got != wanted:
+            findings.append(_finding(
+                "potcar", "error",
+                f"POTCAR element order {got} does not match the POSCAR species "
+                f"blocks {wanted}; VASP would assign the wrong pseudopotential "
+                "to every atom after the first mismatch"))
+        if expected_titels:
+            wrong = [f"{e}: found {t!r}, expected {expected_titels[e]!r}"
+                     for e, t in zip(got, titels)
+                     if e in expected_titels and expected_titels[e] != t]
+            if wrong:
+                findings.append(_finding(
+                    "potcar_provenance", "error",
+                    "POTCAR pseudopotentials differ from the expected set:\n    "
+                    + "\n    ".join(wrong)))
+    else:
+        skipped.append("potcar: POSCAR species blocks unavailable")
+
+    # ── basis set: is the cutoff high enough for these potentials? ──────────
+    if potcar.exists() and "ENCUT" in tags:
+        try:
+            datasets = potcar_enmax(potcar)
+        except VaspSetupError as exc:
+            skipped.append(f"encut: {exc}")
+            datasets = []
+        encut = tags["ENCUT"].strip()
+        if datasets and encut.replace(".", "", 1).isdigit():
+            worst, needed = max(datasets, key=lambda d: d[1])
+            encut = float(encut)
+            if encut < needed:
+                findings.append(_finding(
+                    "encut", "error",
+                    f"ENCUT = {encut:g} eV is below the {needed:g} eV that "
+                    f"{worst} was generated for; the basis set is incomplete for "
+                    "this pseudopotential"))
+            isif = tags.get("ISIF", "2").strip()
+            if isif.isdigit() and int(isif) >= 3 and encut < 1.3 * needed:
+                findings.append(_finding(
+                    "encut", "warning",
+                    f"ISIF = {isif} changes the cell, and ENCUT = {encut:g} eV is "
+                    f"below 1.3 x max(ENMAX) = {1.3 * needed:.0f} eV; a fixed "
+                    "plane-wave count makes the basis set change with the volume"))
+        elif not datasets:
+            skipped.append("encut: no ENMAX found in the POTCAR")
+
+    # ── spin and Hubbard U consistency ──────────────────────────────────────
+    if tags.get("ISPIN", "1").strip() == "2" and "MAGMOM" in tags and blocks:
+        natoms = sum(count for _, count in blocks)
+        given = 0
+        for token in tags["MAGMOM"].split():
+            if "*" in token:
+                multiplier, _, _ = token.partition("*")
+                given += int(multiplier) if multiplier.strip().isdigit() else 0
+            elif token.strip():
+                given += 1
+        if given and given != natoms:
+            findings.append(_finding(
+                "spin", "error",
+                f"MAGMOM gives {given} moments for {natoms} atoms; VASP reads them "
+                "positionally, so every atom after the mismatch gets the wrong "
+                "starting moment"))
+    if tags.get("LDAU", ".FALSE.").upper().startswith(".T"):
+        lmaxmix = tags.get("LMAXMIX", "2").strip()
+        if lmaxmix.isdigit() and int(lmaxmix) < 4:
+            findings.append(_finding(
+                "ldau", "error",
+                f"LDAU is on but LMAXMIX = {lmaxmix}; the on-site occupancies it "
+                "mixes need LMAXMIX 4 for d electrons and 6 for f, otherwise the "
+                "density and the total energy do not converge to the same answer"))
+
+    # ── a band needs its images ─────────────────────────────────────────────
+    if detected == "neb" and "IMAGES" in tags:
+        n_images = tags["IMAGES"].strip()
+        if n_images.isdigit():
+            wanted = [f"{i:02d}" for i in range(int(n_images) + 2)]
+            missing = [name for name in wanted
+                       if not (path / name / "POSCAR").is_file()]
+            if missing:
+                findings.append(_finding(
+                    "neb", "error",
+                    f"IMAGES = {n_images} needs image directories "
+                    f"{wanted[0]}..{wanted[-1]} each with a POSCAR (00 and "
+                    f"{wanted[-1]} are the endpoints); missing: "
+                    f"{', '.join(missing)}"))
+
+    # ── every symlink relative and resolving ────────────────────────────────
+    for entry in sorted(path.iterdir()):
+        if not entry.is_symlink():
+            continue
+        target = os.readlink(entry)
+        if os.path.isabs(target):
+            findings.append(_finding(
+                "symlinks", "error",
+                f"{entry.name} is an absolute symlink to {target}; it breaks as "
+                "soon as the tree is copied to another machine"))
+        if not entry.exists():
+            findings.append(_finding(
+                "symlinks", "error", f"{entry.name} is a dangling symlink to {target}"))
+
+    # ── continuation runs ───────────────────────────────────────────────────
+    if poscar.is_symlink():
+        resolved = Path(os.readlink(poscar))
+        if resolved.name != "CONTCAR":
+            findings.append(_finding(
+                "continuation", "warning",
+                f"POSCAR is a symlink to {resolved.name}, not to a CONTCAR"))
+        source = poscar.resolve().parent
+        outcar = source / "OUTCAR"
+        if outcar.exists() and poscar.resolve().stat().st_mtime > outcar.stat().st_mtime + 1:
+            findings.append(_finding(
+                "continuation", "error",
+                f"the CONTCAR this POSCAR points at is newer than {outcar}: the "
+                "source run looks still active, so the geometry may be half written"))
+        elif not outcar.exists():
+            skipped.append("continuation: source directory has no OUTCAR to check")
+
+    # ── interactive mode ────────────────────────────────────────────────────
+    if detected == "interactive":
+        stdin_candidates = [p for p in path.glob("*interactive*") if p.is_file()]
+        if not stdin_candidates:
+            findings.append(_finding(
+                "interactive", "error",
+                "interactive mode is on but no stdin structure file was found; "
+                "VASP would walk only the POSCAR"))
+        else:
+            n_extra = count_interactive_structures(stdin_candidates[0])
+            need = n_extra + 1
+            nsw = tags.get("NSW", "").strip()
+            if not nsw.isdigit():
+                findings.append(_finding(
+                    "interactive", "error", f"NSW is {nsw or 'unset'}, expected an integer"))
+            elif int(nsw) < need:
+                findings.append(_finding(
+                    "interactive", "error",
+                    f"NSW = {nsw} but {stdin_candidates[0].name} holds {n_extra} "
+                    f"structures plus the POSCAR, so NSW must be at least {need}; "
+                    "VASP stops early and the missing structures are silently lost"))
+
+    # ── charge density that must exist ──────────────────────────────────────
+    icharg = tags.get("ICHARG", "").strip()
+    if icharg in ("1", "11") and not (path / "CHGCAR").exists():
+        findings.append(_finding(
+            "restart_files", "error",
+            f"ICHARG = {icharg} reads the charge density from CHGCAR, which is "
+            "not in this directory; VASP fails at startup"))
+
+    # ── job script ──────────────────────────────────────────────────────────
+    script = _find_job_script(path)
+    if script is None:
+        skipped.append("job_script: no file containing #SBATCH directives found")
+    else:
+        text = script.read_text(errors="replace")
+        why = {"--licenses=": "on ZIH this is the filesystem interlock; without "
+                             "it a job can start while its file system is down "
+                             "and lose the whole walltime",
+               "--mail-user=": "job notifications",
+               "--output=": "a descriptive output file name",
+               "--job-name=": "a descriptive job name"}
+        for flag in tuple(REQUIRED_SBATCH) + tuple(require or ()):
+            if _sbatch_value(text, flag) is None:
+                reason = why.get(flag, "required for this site")
+                findings.append(_finding(
+                    "job_script", "error",
+                    f"{script.name} has no active '#SBATCH {flag}' line ({reason})"))
+        ntasks = _sbatch_value(text, "--ntasks-per-node=")
+        nodes = _sbatch_value(text, "--nodes=") or "1"
+        ncore, kpar = tags.get("NCORE", "1").strip(), tags.get("KPAR", "1").strip()
+        if ntasks and ntasks.isdigit() and nodes.isdigit() and ncore.isdigit() and kpar.isdigit():
+            total = int(nodes) * int(ntasks)
+            group = int(ncore) * int(kpar)
+            if group and total % group:
+                findings.append(_finding(
+                    "parallel_layout", "warning",
+                    f"NCORE({ncore}) * KPAR({kpar}) = {group} does not divide the "
+                    f"{total} ranks requested ({nodes} node(s) * {ntasks}); VASP "
+                    "will redistribute and the layout is not the one intended"))
+        else:
+            skipped.append("parallel_layout: rank count or NCORE/KPAR not both known")
+
+    # ── KPOINTS, and KPAR against it ────────────────────────────────────────
+    kpoints = path / "KPOINTS"
+    mesh = None
+    if not kpoints.exists():
+        if "KSPACING" not in tags:
+            findings.append(_finding(
+                "kpoints", "error",
+                "no KPOINTS file and no KSPACING tag; VASP falls back to a "
+                "single k-point, which is almost never what was intended"))
+    else:
+        mesh = _parse_kpoints_mesh(kpoints)
+        # Configured directories only: the run directory holds the KPOINTS being
+        # checked, so searching it too would compare the file against itself.
+        reference_kpoints = _find_template("KPOINTS", configured)
+        if reference_kpoints is not None:
+            want = _parse_kpoints_mesh(reference_kpoints)
+            if mesh and want and mesh != want:
+                findings.append(_finding(
+                    "kpoints", "error",
+                    f"k-mesh {mesh} differs from the template's {want}"))
+            elif not (mesh and want):
+                skipped.append("kpoints: not an automatic mesh, meshes not compared")
+    if mesh:
+        kpar = tags.get("KPAR", "1").strip()
+        product = mesh[0] * mesh[1] * mesh[2]
+        if kpar.isdigit() and int(kpar) > product:
+            findings.append(_finding(
+                "kpoints", "error",
+                f"KPAR = {kpar} exceeds the {product} k-points the {mesh} mesh can "
+                "produce. Note this is a necessary condition only: symmetry "
+                "reduction can leave fewer k-points than the mesh product, so a "
+                "KPAR below this bound may still be too large"))
+
+    # ── INCAR against the template it names ─────────────────────────────────
+    # A missing template is reported, never silently skipped: this is the
+    # strongest check in the tool, and "skipped" in a passing report is how it
+    # came to be enforced nowhere.
+    if tags:
+        if provenance is None:
+            if configured:
+                findings.append(_finding(
+                    "template", "warning",
+                    "a template directory was given but this INCAR carries no "
+                    "tools4vasp provenance header, so it cannot be compared to "
+                    "one; it was not built by tools4vasp.vaspsetup"))
+            else:
+                skipped.append("template: this INCAR carries no provenance header "
+                               "and no template directory is configured")
+        else:
+            tmpl_path = _find_template(provenance["template"], searched)
+            if tmpl_path is None and not configured:
+                findings.append(_finding(
+                    "template", "warning",
+                    f"this INCAR declares template {provenance['template']!r} but no "
+                    f"template directory is configured (--template or "
+                    f"${TEMPLATES_ENV}), so undeclared deviations from it were not "
+                    "checked"))
+            elif tmpl_path is None:
+                findings.append(_finding(
+                    "template", "error",
+                    f"this INCAR declares template {provenance['template']!r}, which "
+                    f"is not in {', '.join(str(d) for d in searched)}"))
+            else:
+                tmpl_tags = parse_incar(tmpl_path)
+                now = template_fingerprint(tmpl_tags)
+                if now != provenance["sha256"]:
+                    findings.append(_finding(
+                        "template", "error",
+                        f"the template {tmpl_path.name} has changed since this INCAR "
+                        f"was built (fingerprint {now} vs {provenance['sha256']}), so "
+                        "the two are no longer comparable"))
+                declared = {tag.upper() for tag in provenance["overrides"]}
+                differing = {tag for tag in set(tags) | set(tmpl_tags)
+                             if tags.get(tag) != tmpl_tags.get(tag)}
+                undeclared = sorted(differing - declared)
+                if undeclared:
+                    detail = ", ".join(
+                        f"{tag}: template {tmpl_tags.get(tag, '(absent)')!r} vs INCAR "
+                        f"{tags.get(tag, '(absent)')!r}" for tag in undeclared)
+                    findings.append(_finding(
+                        "template", "error",
+                        f"{len(undeclared)} tag(s) differ from the template without "
+                        f"being declared as overrides: {detail}"))
+                for tag in _DIPOLE_TAGS:
+                    if (tag in tags) != (tag in tmpl_tags):
+                        where = "INCAR" if tag in tags else "template"
+                        findings.append(_finding(
+                            "dipole", "warning",
+                            f"{tag} is set in the {where} only; a dipole correction "
+                            "changes the energy zero, so mixing corrected and "
+                            "uncorrected runs in one comparison is not valid"))
+
+    # ── what actually ran, against what was asked for ───────────────────────
+    if outcar:
+        from tools4vasp.outcar_convergence import _find_outcar, _read_outcar_text
+        found = _find_outcar(str(path))
+        if found is None:
+            skipped.append("outcar: no OUTCAR in this directory yet")
+        elif not tags:
+            skipped.append("outcar: no INCAR to compare the run against")
+        else:
+            declared = provenance["overrides"] if provenance else ()
+            more, notes = compare_incar_to_outcar(
+                tags, _read_outcar_text(found), declared=declared)
+            findings += more
+            skipped += notes
+
+    errors = [f for f in findings if f["level"] == "error"]
+    warnings = [f for f in findings if f["level"] == "warning"]
+    return {"path": str(path), "run_type": detected or "unknown",
+            "findings": findings,
+            "skipped": skipped, "errors": len(errors), "warnings": len(warnings)}
+
+
+def run(path=".", template=None, run_type=None, expected_titels=None,
+        verbose=True, strict=False, require=(), outcar=False):
+    """Lint ``path`` and print a human-readable report. Returns the lint dict."""
+    result = lint(path, template=template, run_type=run_type,
+                  expected_titels=expected_titels, require=require, outcar=outcar)
+    if verbose:
+        print(f"* vasplint {result['path']}  (run type: {result['run_type']})")
+        for finding in result["findings"]:
+            mark = "ERROR  " if finding["level"] == "error" else "WARNING"
+            print(f"  {mark} [{finding['check']}] {finding['message']}")
+        for note in result["skipped"]:
+            print(f"  skipped {note}")
+        if not result["findings"]:
+            print("  all checks passed")
+        print(f"  {result['errors']} error(s), {result['warnings']} warning(s)")
+    result["ok"] = result["errors"] == 0 and not (strict and result["warnings"])
+    return result
+
+
+def main():
+    """CLI entry point: vasplint [path ...]."""
+    parser = argparse.ArgumentParser(
+        description="Check VASP input directories before submitting them.",
+        epilog=f"Example: vasplint --site zih --template templates/ --strict run_*/\n"
+               f"The INCAR names its own template in its header; --template and "
+               f"${TEMPLATES_ENV} only say where to look for it.")
+    parser.add_argument("paths", nargs="*", default=["."],
+                        help="run directories to check (default: the current one)")
+    parser.add_argument("--template", action="append", default=None, metavar="DIR",
+                        help="directory holding the INCAR/KPOINTS templates to compare "
+                             f"against, repeatable. ${TEMPLATES_ENV} is also searched "
+                             "(colon-separated), so a caller that does not know which "
+                             "template an INCAR came from can still have the check run")
+    parser.add_argument("--run-type", default=None,
+                        help="override the run type inferred from the INCAR")
+    sites = "; ".join(f"{name}: {' '.join(flags)}"
+                      for name, flags in sorted(SITE_SBATCH.items()))
+    parser.add_argument("--site", choices=sorted(SITE_SBATCH),
+                        help="also require the #SBATCH directives a known site "
+                             f"needs ({sites})")
+    parser.add_argument("--require", action="append", default=[], metavar="FLAG",
+                        help="extra #SBATCH directive the job script must carry, "
+                             "repeatable. Attach the value with '=' so argparse does "
+                             "not read it as an option: --require=--licenses=")
+    parser.add_argument("--outcar", action="store_true",
+                        help="also compare the INCAR against the parameters VASP "
+                             "reports having used, for a directory that has already "
+                             "run. Catches post-lint edits, values VASP overrode and "
+                             "tags it silently ignored, and makes the KPAR check exact")
+    parser.add_argument("--strict", action="store_true",
+                        help="treat warnings as failures too")
+    parser.add_argument("--json", action="store_true",
+                        help="emit machine-readable JSON instead of a report")
+    args = parser.parse_args()
+    require = list(args.require) + list(SITE_SBATCH.get(args.site, ()))
+
+    results, failed = [], False
+    for path in args.paths or ["."]:
+        try:
+            result = run(path, template=args.template, run_type=args.run_type,
+                         verbose=not args.json, strict=args.strict,
+                         require=require, outcar=args.outcar)
+        except VaspSetupError as exc:
+            result = {"path": str(path), "errors": 1, "warnings": 0, "ok": False,
+                      "findings": [_finding("input", "error", str(exc))], "skipped": []}
+            if not args.json:
+                print(f"* vasplint {path}\n  ERROR   [input] {exc}")
+        results.append(result)
+        failed = failed or not result["ok"]
+    if args.json:
+        print(json.dumps(results if len(results) > 1 else results[0], indent=2))
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
