@@ -114,9 +114,14 @@ vasplint --outcar ./run               # after the run: did it compute what the I
 `tools4vasp.vaspsetup` is the importable side: it builds POSCAR, POTCAR (real
 file per batch, relative symlinks from the run directories), INCAR with declared
 overrides, interactive-mode stdin files, job scripts, and continuation
-directories whose `POSCAR` is a relative symlink to the previous `CONTCAR`. See
-[skills/vasp/SKILL.md](skills/vasp/SKILL.md) and the commented default INCAR in
-[skills/vasp/templates/](skills/vasp/templates/).
+directories whose `POSCAR` is a relative symlink to the previous `CONTCAR`.
+
+An agent skill that drives these two tools, together with a commented default
+INCAR template and a job script that lints its own directory, lives outside this
+package in
+[work_in_progress/agentic_work/vasp-setup](https://github.com/Tonner-Zech-Group/work_in_progress/tree/main/agentic_work/vasp-setup).
+Prompt files and templates are not Python and do not belong in a released,
+DOI-bearing package.
 
 </details>
 
