@@ -789,3 +789,59 @@ def test_selective_dynamics_carries_through_a_continuation(tmp_path):
     blocks, selective = read_poscar_blocks(dest / "POSCAR")
     assert selective is True                     # read through the symlink
     assert blocks == [("Si", 1), ("H", 1)]
+
+
+# ---------------------------------------------------------------------------
+# Copilot review 2026-09-07
+# ---------------------------------------------------------------------------
+
+def test_interactive_stdin_writes_nothing_when_a_later_structure_is_wrong(tmp_path):
+    """A truncated stdin file is not a detectably broken one.
+
+    It is a valid file holding too few structures, so the run starts and
+    quietly does less than it was asked to. Validate first, write after.
+    """
+    from ase import Atoms
+    good = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.7]], cell=[5, 5, 5], pbc=True)
+    bad = Atoms("H3", positions=[[0, 0, 0], [0, 0, 0.7], [0, 0, 1.4]],
+                cell=[5, 5, 5], pbc=True)
+    out = tmp_path / "interactive.in"
+    with pytest.raises(VaspSetupError, match="structure 3"):
+        write_interactive_stdin([good, good, bad], out)
+    assert not out.exists(), "a partial stdin file was left behind"
+
+
+def test_continuation_dir_writes_nothing_when_the_source_has_no_incar(tmp_path):
+    """A half-built continuation looks submittable and is not."""
+    src = _finished_run(tmp_path)
+    (src / "INCAR").unlink()
+    dest = tmp_path / "run2"
+    with pytest.raises(VaspSetupError, match="no INCAR"):
+        continuation_dir(src, dest)
+    assert not dest.exists(), "a partial continuation directory was left behind"
+
+
+def test_continuation_dir_refuses_to_overwrite_an_existing_run(tmp_path):
+    """rel_symlink() unlinks what it replaces, so a mistyped dest ate a run."""
+    src = _finished_run(tmp_path)
+    dest = tmp_path / "run2"
+    continuation_dir(src, dest)
+    with pytest.raises(VaspSetupError, match="already holds"):
+        continuation_dir(src, dest)
+
+
+def test_continuation_provenance_does_not_name_itself_as_its_template(tmp_path):
+    """vasplint searches the run directory first.
+
+    A bare ``template=INCAR`` therefore made dest/INCAR its own template, and
+    its fingerprint includes the overrides just applied, so every valid
+    continuation was reported as "the template has changed".
+    """
+    src = _finished_run(tmp_path)
+    dest = tmp_path / "run2"
+    continuation_dir(src, dest, incar_overrides={"NSW": ("200", "needs more steps")})
+    provenance = incar_provenance(dest / "INCAR")
+    assert provenance["template"] != "INCAR"
+    assert provenance["template"].endswith(os.path.join("run1", "INCAR"))
+    # and it resolves from the continuation directory
+    assert (dest / provenance["template"]).is_file()

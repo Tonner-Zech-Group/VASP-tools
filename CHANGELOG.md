@@ -1,11 +1,14 @@
 # Changelog
 
-## [1.4.0] - 2026-09-01
+## [1.4.0] - 2026-09-08
 
 ### Bug Fixes
 
+- **`vaspcheck`** — the electronic-entropy check had its sign inverted and could never fire. `TOTEN` is `F = E - T*S` and *energy without entropy* is `E`, so `toten - e_wo_entropy` is `-T*S`: for Gaussian/Fermi smearing (`ISMEAR <= 0`) that is never positive and so never exceeded the positive limit, and an arbitrarily large electronic entropy was reported as fine. The entropy is now `e_wo_entropy - toten` and it is the *magnitude* that is compared, because with Methfessel-Paxton smearing (`ISMEAR > 0`) the term is legitimately negative and a large negative value is as much a warning sign as a large positive one. Found while auditing 61 calculations, every one of which reported "entropy OK" without the comparison ever having run. (PR #28)
+- **`mixed_interpolate`** — a `return` inside a `finally` block silently swallowed every exception raised by the geodesic smoothing step, so a failed interpolation looked like a successful one. (PR #27)
 - **Packaging** — the wheel and sdist now contain `bash_scripts/*.sh`. They previously shipped only `bash_scripts/__init__.py`, so every console script that shells out to a shell script (`getPOTCAR`, `replace_potcar_symlinks`, `calc-deformation-density`, `plot_neb_movie`) was broken for anyone who installed from PyPI rather than from a checkout. Verified by building both artifacts and installing the wheel: all five scripts present, mode 0755.
 - **CI** — `python-app.yml` now runs on every pull request, not only those targeting `main`. A pull request stacked on another feature branch previously received no checks at all, which on this repository matters because merging to `main` auto-publishes a release.
+- **CI** — Ruff is pinned to `0.16.0` instead of installed unpinned, and the ~230 findings that release newly flagged are fixed. An unpinned linter meant an unrelated pull request could fail on lint because a new Ruff had shipped that morning. (PR #27)
 
 ### Enhancements
 

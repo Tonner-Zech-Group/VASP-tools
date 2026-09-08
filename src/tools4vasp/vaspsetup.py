@@ -376,8 +376,13 @@ def normalise_overrides(overrides) -> dict:
 
 
 def render_incar(template, out_path, overrides=None, run_type=None,
-                 extra_comment=None):
+                 extra_comment=None, template_name=None):
     """Write ``out_path`` from ``template``, applying ``overrides``.
+
+    ``template_name`` overrides the name recorded in the provenance header,
+    which otherwise is the template's basename. It exists so a caller whose
+    template sits in another directory can record a path that resolves from
+    ``out_path`` -- see :func:`continuation_dir`.
 
     ``overrides`` maps an upper-case tag to ``(value, reason)``. Every override
     needs a one-line reason; see :func:`normalise_overrides`.
@@ -462,7 +467,7 @@ def render_incar(template, out_path, overrides=None, run_type=None,
     # the template's own. A reason is still required for every override, since
     # the caller cannot know in advance which ones will bite.
     header = [(
-        f"{PROVENANCE_PREFIX} template={template.name} "
+        f"{PROVENANCE_PREFIX} template={template_name or template.name} "
         f"sha256={template_fingerprint(template)} "
         f"overrides={','.join(sorted(changed)) if changed else '-'}"
     )]
@@ -695,14 +700,20 @@ def write_interactive_stdin(atoms_list, path):
     if len(atoms_list) < 2:
         raise VaspSetupError(
             f"interactive mode needs at least 2 structures, got {len(atoms_list)}")
+    # Validate the whole series before the file is opened. Checking inside the
+    # write loop leaves a truncated file behind when a later structure is
+    # rejected, and a truncated stdin file is not detectably broken: it is a
+    # valid file with too few structures, so the run starts and quietly does
+    # less than it was asked to.
     reference = atoms_list[0]
+    for k, atoms in enumerate(atoms_list[1:], start=2):
+        if len(atoms) != len(reference):
+            raise VaspSetupError(
+                f"structure {k} has {len(atoms)} atoms, expected "
+                f"{len(reference)}; interactive mode requires a constant "
+                "atom count")
     with open(path, "w") as fh:
-        for k, atoms in enumerate(atoms_list[1:], start=2):
-            if len(atoms) != len(reference):
-                raise VaspSetupError(
-                    f"structure {k} has {len(atoms)} atoms, expected "
-                    f"{len(reference)}; interactive mode requires a constant "
-                    "atom count")
+        for atoms in atoms_list[1:]:
             fh.writelines(
                 f"{pos[0]:19.16f} {pos[1]:19.16f} {pos[2]:19.16f}\n"
                 for pos in atoms.get_scaled_positions(wrap=False))
@@ -823,22 +834,50 @@ def continuation_dir(src_dir, dest_dir, incar_overrides=None, run_type=None,
                 f"the ionic relaxation in {src} did not reach the required "
                 "accuracy; this continuation starts from an unconverged geometry")
 
-    dest.mkdir(parents=True, exist_ok=True)
-    created = [str(dest / "POSCAR")]
-    rel_symlink(contcar, dest / "POSCAR")
+    src_incar = src / "INCAR"
+    if not src_incar.is_file():
+        raise VaspSetupError(f"no INCAR in {src} to carry forward")
+
+    # Everything above only reads. From here on the destination is written, so
+    # the remaining failure modes are resolved first: a directory that is half
+    # built looks submittable and is not, and rel_symlink() unlinks whatever it
+    # replaces, so a mistyped dest_dir would quietly eat an existing run.
+    links = [(contcar, dest / "POSCAR")]
     for name in link_names:
         source = src / name
         if not source.exists():
             warnings.append(f"{source} does not exist and was not linked")
             continue
-        target = source.resolve() if source.is_symlink() else source
-        rel_symlink(target, dest / name)
-        created.append(str(dest / name))
-    src_incar = src / "INCAR"
-    if not src_incar.is_file():
-        raise VaspSetupError(f"no INCAR in {src} to carry forward")
+        links.append((source.resolve() if source.is_symlink() else source, dest / name))
+    if dest.exists():
+        clashes = sorted(p.name for _, p in links if p.exists() or p.is_symlink())
+        if (dest / "INCAR").exists():
+            clashes.append("INCAR")
+        if clashes:
+            raise VaspSetupError(
+                f"{dest} already holds {', '.join(sorted(set(clashes)))}; refusing "
+                "to overwrite an existing run. Remove it or choose another "
+                "destination.")
+
+    # Rendered before anything is written: render_incar() rejects a template
+    # that does not suit run_type, and that refusal must not land after the
+    # symlinks do.
+    #
+    # The template is recorded as the path to the *source* INCAR rather than as
+    # the bare name "INCAR". vasplint searches the run directory first, so a
+    # bare name makes dest/INCAR its own template: its fingerprint includes the
+    # overrides just applied, so it never matches the recorded one and every
+    # valid continuation is reported as "the template has changed".
+    rel_src = os.path.relpath(src.resolve(), dest.resolve())
+    dest.mkdir(parents=True, exist_ok=True)
     render_incar(src_incar, dest / "INCAR", overrides=incar_overrides,
                  run_type=run_type,
-                 extra_comment=f"continuation of {os.path.relpath(src.resolve(), dest.resolve())}")
+                 template_name=os.path.join(rel_src, "INCAR"),
+                 extra_comment=f"continuation of {rel_src}")
+
+    created = []
+    for target, link in links:
+        rel_symlink(target, link)
+        created.append(str(link))
     created.append(str(dest / "INCAR"))
     return {"created": created, "warnings": warnings}

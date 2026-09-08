@@ -103,11 +103,22 @@ def template_dirs(explicit=None) -> list:
     return out
 
 
-def _find_template(name, dirs):
+def _find_template(name, dirs, exclude=None):
+    """The first ``name`` under ``dirs``, skipping ``exclude``.
+
+    ``exclude`` is the file being checked. Nothing is its own template, and the
+    run directory is searched first, so without this an INCAR whose provenance
+    names a bare ``INCAR`` selects itself and is then compared against its own
+    post-override fingerprint.
+    """
+    exclude = exclude.resolve() if exclude is not None and exclude.exists() else None
     for d in dirs:
         candidate = d / name
-        if candidate.is_file():
-            return candidate
+        if not candidate.is_file():
+            continue
+        if exclude is not None and candidate.resolve() == exclude:
+            continue
+        return candidate
     return None
 
 
@@ -140,6 +151,10 @@ def outcar_effective_tags(text: str) -> dict:
     k-point count, the band/k-point parallel layout that gives NCORE and KPAR,
     and the dispersion correction.
 
+    The tag token is matched unbounded: a length cap silently drops the longest
+    real tags (``LNONCOLLINEAR`` is 13 characters), and dropping one makes
+    ``--outcar`` report a declared override as absent or misspelled.
+
     Returns upper-case tag -> value string, plus the derived keys ``NKPTS``,
     ``_NCORE``, ``_KPAR``.
     """
@@ -149,7 +164,7 @@ def outcar_effective_tags(text: str) -> dict:
         if "=" not in line:
             continue
         for segment in line.split(";"):
-            match = re.match(r"\s*([A-Z][A-Z0-9_]{1,11})\s*=\s*(\S+)", segment)
+            match = re.match(r"\s*([A-Z][A-Z0-9_]*)\s*=\s*(\S+)", segment)
             if match:
                 tags.setdefault(match.group(1), match.group(2))
 
@@ -302,15 +317,35 @@ def _parse_kpoints_mesh(path):
 
 
 def _sbatch_value(text, flag):
-    """The value of an *active* ``#SBATCH <flag>`` directive, or None."""
+    """The value of an *active* ``#SBATCH <flag>`` directive, or None.
+
+    SLURM accepts a long option as either ``--opt=value`` or ``--opt value``,
+    and both are equally valid in a job script. Callers pass the flag in the
+    ``--opt=`` spelling (see :data:`~tools4vasp.vaspsetup.REQUIRED_SBATCH`), so
+    the ``=`` is normalised away and both spellings are recognised; matching
+    only the first would report a perfectly good script as missing the
+    directive.
+
+    The separator is required, so a longer flag that merely starts with the one
+    asked for does not match: ``--ntasks-per-node=24`` is not a value for
+    ``--ntasks=``.
+    """
+    name = flag.rstrip("=")
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped.startswith("#SBATCH"):
             continue
         body = stripped[len("#SBATCH"):].strip()
-        if body.startswith(flag):
-            value = body[len(flag):].strip()
-            return value.split("#")[0].strip().strip('"').strip("'")
+        if not body.startswith(name):
+            continue
+        rest = body[len(name):]
+        if rest[:1] == "=":
+            value = rest[1:]
+        elif rest[:1].isspace() or rest == "":
+            value = rest
+        else:
+            continue
+        return value.strip().split("#")[0].strip().strip('"').strip("'")
     return None
 
 
@@ -440,10 +475,12 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
         except VaspSetupError as exc:
             skipped.append(f"encut: {exc}")
             datasets = []
-        encut = tags["ENCUT"].strip()
-        if datasets and encut.replace(".", "", 1).isdigit():
+        encut_text = tags["ENCUT"].strip()
+        # _as_float, not str.isdigit: ENCUT = 4.0E2 is a valid cutoff, and the
+        # digits-only test rejected it and then checked nothing at all.
+        encut = _as_float(encut_text)
+        if datasets and encut is not None:
             worst, needed = max(datasets, key=lambda d: d[1])
-            encut = float(encut)
             if encut < needed:
                 findings.append(_finding(
                     "encut", "error",
@@ -459,6 +496,8 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                     "plane-wave count makes the basis set change with the volume"))
         elif not datasets:
             skipped.append("encut: no ENMAX found in the POTCAR")
+        else:
+            skipped.append(f"encut: ENCUT = {encut_text!r} is not a number")
 
     # ── spin and Hubbard U consistency ──────────────────────────────────────
     if tags.get("ISPIN", "1").strip() == "2" and "MAGMOM" in tags and blocks:
@@ -521,15 +560,26 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
             findings.append(_finding(
                 "continuation", "warning",
                 f"POSCAR is a symlink to {resolved.name}, not to a CONTCAR"))
-        source = poscar.resolve().parent
-        outcar = source / "OUTCAR"
-        if outcar.exists() and poscar.resolve().stat().st_mtime > outcar.stat().st_mtime + 1:
-            findings.append(_finding(
-                "continuation", "error",
-                f"the CONTCAR this POSCAR points at is newer than {outcar}: the "
-                "source run looks still active, so the geometry may be half written"))
-        elif not outcar.exists():
-            skipped.append("continuation: source directory has no OUTCAR to check")
+        # A dangling POSCAR is already reported by the symlink check above.
+        # Following it here would raise FileNotFoundError out of lint() and
+        # lose every finding, including that one.
+        if not poscar.exists():
+            skipped.append("continuation: the POSCAR symlink does not resolve, "
+                           "so its source run could not be checked")
+        else:
+            # Not named `outcar`: that is this function's own flag, and
+            # rebinding it here silently switched on the --outcar comparison
+            # for every continuation directory.
+            source = poscar.resolve().parent
+            src_outcar = source / "OUTCAR"
+            if not src_outcar.exists():
+                skipped.append("continuation: source directory has no OUTCAR to check")
+            elif poscar.resolve().stat().st_mtime > src_outcar.stat().st_mtime + 1:
+                findings.append(_finding(
+                    "continuation", "error",
+                    f"the CONTCAR this POSCAR points at is newer than {src_outcar}: "
+                    "the source run looks still active, so the geometry may be half "
+                    "written"))
 
     # ── interactive mode ────────────────────────────────────────────────────
     if detected == "interactive":
@@ -601,8 +651,11 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
         if "KSPACING" not in tags:
             findings.append(_finding(
                 "kpoints", "error",
-                "no KPOINTS file and no KSPACING tag; VASP falls back to a "
-                "single k-point, which is almost never what was intended"))
+                "no KPOINTS file and no KSPACING tag; VASP then generates the "
+                "mesh from its default KSPACING = 0.5 A^-1, so the run silently "
+                "uses a k-point sampling nobody chose or converged. State "
+                "KSPACING (or ship a KPOINTS file) so the sampling is on the "
+                "record"))
     else:
         mesh = _parse_kpoints_mesh(kpoints)
         # Configured directories only: the run directory holds the KPOINTS being
@@ -643,7 +696,8 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                 skipped.append("template: this INCAR carries no provenance header "
                                "and no template directory is configured")
         else:
-            tmpl_path = _find_template(provenance["template"], searched)
+            tmpl_path = _find_template(provenance["template"], searched,
+                                       exclude=incar_path)
             if tmpl_path is None and not configured:
                 findings.append(_finding(
                     "template", "warning",
@@ -662,7 +716,7 @@ def lint(path=".", template=None, run_type=None, expected_titels=None,
                 if now != provenance["sha256"]:
                     findings.append(_finding(
                         "template", "error",
-                        f"the template {tmpl_path.name} has changed since this INCAR "
+                        f"the template {provenance['template']} has changed since this INCAR "
                         f"was built (fingerprint {now} vs {provenance['sha256']}), so "
                         "the two are no longer comparable"))
                 declared = {tag.upper() for tag in provenance["overrides"]}

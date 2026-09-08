@@ -847,3 +847,144 @@ def test_vasp6_only_tags_do_not_confuse_the_run_type(tmp_path):
     result = lint(d)
     assert result["run_type"] == "single_point"
     assert result["errors"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Copilot review 2026-09-07
+# ---------------------------------------------------------------------------
+
+def test_outcar_tags_are_not_truncated_by_length():
+    """A tag longer than 12 characters is still a tag.
+
+    ``LNONCOLLINEAR`` is 13; the old bound silently dropped it, so --outcar
+    reported a declared override as absent or misspelled.
+    """
+    tags = outcar_effective_tags(
+        "   LNONCOLLINEAR =      F    non collinear calculations\n"
+        "   ISPIN  =      2    spin polarized calculation?\n")
+    assert tags["LNONCOLLINEAR"] == "F"
+    assert tags["ISPIN"] == "2"
+
+
+def test_sbatch_directives_are_found_in_the_whitespace_spelling(tmp_path):
+    """SLURM takes ``--opt value`` as readily as ``--opt=value``."""
+    job = """\
+#!/bin/bash
+#SBATCH --job-name test-run
+#SBATCH --output slurm-%j.out
+#SBATCH --mail-user someone@example.org
+#SBATCH --nodes 1
+#SBATCH --ntasks-per-node 48
+
+srun vasp_std
+"""
+    d = _run_dir(tmp_path, job=job)
+    assert _errors(lint(d), "job_script") == []
+
+
+def test_a_longer_flag_is_not_read_as_the_shorter_one(tmp_path):
+    """``--ntasks-per-node=48`` must not answer for ``--ntasks=``.
+
+    A regression guard rather than a fix: the old exact-prefix match got this
+    right by construction, and accepting the whitespace spelling is exactly the
+    kind of loosening that would break it.
+    """
+    from tools4vasp.vasplint import _sbatch_value
+    assert _sbatch_value("#SBATCH --ntasks-per-node=48\n", "--ntasks=") is None
+    assert _sbatch_value("#SBATCH --ntasks-per-node=48\n", "--ntasks-per-node=") == "48"
+
+
+def test_encut_in_scientific_notation_is_still_checked(tmp_path):
+    """``ENCUT = 4.0E2`` is 400 eV, not an unparseable string.
+
+    The digits-only test rejected it and then checked nothing at all, so a
+    cutoff far below the POTCAR's ENMAX passed silently.
+    """
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_enmax(d / "POTCAR", [("PAW_PBE K_pv 17Jan2003", 259.0),
+                                 ("PAW_PBE Ti_sv 07Sep2000", 274.6)])
+    # 2.5E2 = 250 eV, the same cutoff the digits-only spelling already catches.
+    (d / "INCAR").write_text(INCAR_SINGLE_POINT.replace("ENCUT = 400", "ENCUT = 2.5E2"))
+    findings = _errors(lint(d), "encut")
+    assert findings and "274.6" in findings[0]["message"], findings
+
+
+def test_unparseable_encut_is_reported_as_skipped(tmp_path):
+    d = _run_dir(tmp_path, poscar=POSCAR_SUFFIXED)
+    _potcar_enmax(d / "POTCAR", [("PAW_PBE K_pv 17Jan2003", 259.0),
+                                 ("PAW_PBE Ti_sv 07Sep2000", 274.6)])
+    (d / "INCAR").write_text(INCAR_SINGLE_POINT.replace("ENCUT = 400", "ENCUT = high"))
+    result = lint(d)
+    assert any(s.startswith("encut:") for s in result["skipped"]), result["skipped"]
+
+
+def test_a_dangling_poscar_symlink_does_not_abort_the_lint(tmp_path):
+    """The dangling-symlink finding must survive, not become a traceback.
+
+    The source directory must hold an OUTCAR for this to bite: the mtime
+    comparison short-circuits on a missing OUTCAR, so it is the half-present
+    source -- OUTCAR there, CONTCAR gone -- that reached the stat().
+    """
+    src = tmp_path / "run1"
+    src.mkdir()
+    (src / "OUTCAR").write_text("General timing and accounting\n")
+    d = _run_dir(tmp_path, name="run2")
+    (d / "POSCAR").unlink()
+    os.symlink(os.path.join("..", "run1", "CONTCAR"), d / "POSCAR")
+    result = lint(d)
+    assert any("dangling" in f["message"] for f in _errors(result, "symlinks"))
+    assert any("does not resolve" in s for s in result["skipped"]), result["skipped"]
+
+
+def test_the_outcar_flag_survives_a_continuation_directory(tmp_path):
+    """A continuation POSCAR used to rebind lint()'s own ``outcar`` flag."""
+    src = _run_dir(tmp_path, name="run1")
+    (src / "CONTCAR").write_text(POSCAR_VASP5)
+    (src / "OUTCAR").write_text("General timing and accounting\n")
+    d = _run_dir(tmp_path, name="run2")
+    (d / "POSCAR").unlink()
+    rel_symlink(src / "CONTCAR", d / "POSCAR")
+    result = lint(d, outcar=False)
+    assert not [s for s in result["skipped"] if s.startswith("outcar:")], \
+        "the --outcar comparison ran without being asked for"
+
+
+def test_missing_kspacing_message_describes_what_vasp_does(tmp_path):
+    """VASP generates a mesh from the KSPACING default; it does not drop to one
+    k-point. https://www.vasp.at/wiki/index.php/KSPACING (default 0.5)."""
+    d = _run_dir(tmp_path, kpoints=None)
+    message = _errors(lint(d), "kpoints")[0]["message"]
+    assert "KSPACING" in message
+    assert "single k-point" not in message
+
+
+def test_a_valid_continuation_lints_clean(tmp_path):
+    """End to end: build a continuation, then lint it.
+
+    This is the symptom the provenance fix is for. The run directory is
+    searched for templates first, so a continuation whose header named a bare
+    ``INCAR`` selected its own file and compared its post-override fingerprint
+    against the recorded one -- reporting every correct continuation as
+    "the template has changed".
+    """
+    from tools4vasp.vaspsetup import continuation_dir
+
+    src = _run_dir(tmp_path, name="run1")
+    (src / "CONTCAR").write_text(POSCAR_VASP5)
+    (src / "OUTCAR").write_text(
+        "reached required accuracy - stopping structural energy minimisation\n"
+        "General timing and accounting informations for this job:\n")
+    now = 1_700_000_000
+    os.utime(src / "CONTCAR", (now, now))
+    os.utime(src / "OUTCAR", (now + 60, now + 60))
+
+    dest = tmp_path / "run2"
+    continuation_dir(src, dest, link_names=("POTCAR", "KPOINTS"),
+                     incar_overrides={"NSW": ("200", "needs more ionic steps")})
+    (dest / "vasp.run").write_text(JOB_SCRIPT)
+
+    assert _errors(lint(dest), "template") == []
+
+    # and a real edit to the source INCAR is still caught
+    (src / "INCAR").write_text(INCAR_SINGLE_POINT.replace("ENCUT = 400", "ENCUT = 500"))
+    assert _errors(lint(dest), "template")
