@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import math
-from ase.data import atomic_masses
+import sys
+
 import ase.io
-from ase.units import _amu as amu, _me as me
+from ase.data import atomic_masses
+from ase.units import _amu as amu
+from ase.units import _me as me
 
 
 def get_atomic_mass(element_symbol):
@@ -36,7 +39,7 @@ def generate_mw(frequency, atoms):
         factor = math.sqrt(weights[i])
         new_freq_line = []
         for freq in freq_line:
-            if not freq == 0:
+            if freq != 0:
                 new_freq_line.append(freq / factor)
             else:
                 new_freq_line.append(0.0)
@@ -53,7 +56,7 @@ def write_modecar(frequency, filename):
                 line += "    "
             else:
                 line += "   "
-            line += "{:.10E}".format(freq)
+            line += f"{freq:.10E}"
         filestring += line + "\n"
     with open(filename, "w") as file:
         file.write(filestring)
@@ -85,16 +88,14 @@ def main():
     freqs = get_frequencies(outcar)
     if len(freqs) == 0:
         print("No imaginary frequencies found")
-        exit(0)
+        sys.exit(0)
     if len(freqs) < args.index + 1:
         print("The specified mode was not found in the OUTCAR file")
-        exit(1)
+        sys.exit(1)
     if len(freqs) > 1:
         print(f"Found {len(freqs)} imaginary frequencies. Select the frequency for MODECAR generation")
-        freq_index = 0
-        for freq in freqs:
+        for freq_index, freq in enumerate(freqs):
             print(f"{freq_index}    {freq}")
-            freq_index += 1
         if args.index == -1:
             freq_index = int(input("Frequency for MODECAR generation:"))
         else:

@@ -5,18 +5,20 @@
 # 2018/03/13
 #
 # You can import the module and then call .main() or use it as a script
-from ase import io
 import os
+
+from ase import io
+
 
 def run(outFile, inFiles, wrap):
     #if output exists mv to .bak
     if os.path.isfile(outFile):
-        print('ATTENTION: {:} exists, moving to *.bak'.format(outFile))
+        print(f'ATTENTION: {outFile} exists, moving to *.bak')
         os.rename(outFile, outFile+'.bak')
 
     for inFile in inFiles:
         if not os.path.isfile(inFile):
-            raise ValueError('File {:} does not exist'.format(str(inFile)))
+            raise ValueError(f'File {inFile!s} does not exist')
 
 
         if "xdatcar" in inFile.lower():
@@ -28,7 +30,6 @@ def run(outFile, inFiles, wrap):
             if wrap:
                 frame.wrap(center=(0.0,0.0,0.0))
             frame.write(outFile,append=True)
-    return
 
 
 

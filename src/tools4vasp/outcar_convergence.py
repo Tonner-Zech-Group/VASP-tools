@@ -24,10 +24,11 @@ CLI usage
     vaspcheck-outcar path/to/OUTCAR.gz    # gzip-compressed OUTCAR
 """
 
+from __future__ import annotations
+
 import gzip
 import os
 import re
-from typing import List, Optional, Tuple
 
 # VASP OUTCAR SCF convergence strings.
 # VASP 5.x writes "aborting loop because EDIFF is reached".
@@ -58,7 +59,7 @@ def _read_outcar_text(path: str) -> str:
         return fh.read()
 
 
-def _find_outcar(path: str) -> Optional[str]:
+def _find_outcar(path: str) -> str | None:
     """Return the OUTCAR file path for a file or directory argument.
 
     Accepts:
@@ -77,7 +78,7 @@ def _find_outcar(path: str) -> Optional[str]:
     return None
 
 
-def _parse_potcar_poscar_elements(text: str) -> Tuple[List[str], List[str]]:
+def _parse_potcar_poscar_elements(text: str) -> tuple[list[str], list[str]]:
     """Parse element lists from the OUTCAR header.
 
     VASP echoes the POTCAR titles and the POSCAR element line near the top of
@@ -111,7 +112,7 @@ def _parse_potcar_poscar_elements(text: str) -> Tuple[List[str], List[str]]:
         If the POTCAR or POSCAR element lines cannot be found in the text.
     """
     potcar_lines = []
-    poscar_elements: List[str] = []
+    poscar_elements: list[str] = []
 
     for line in text.splitlines():
         stripped = line.strip()
@@ -188,7 +189,7 @@ def check_potcar_poscar_alignment(outcar_path: str) -> dict:
     }
 
 
-def check_scf_convergence_per_step(outcar_path: str) -> List[bool]:
+def check_scf_convergence_per_step(outcar_path: str) -> list[bool]:
     """Return SCF convergence status for each ionic step in the OUTCAR.
 
     Each element is True if the SCF cycle for that ionic step reached the

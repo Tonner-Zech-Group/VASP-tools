@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Wrapper to run the getPOTCAR.sh bash script as an installed console command."""
+import os
 import subprocess
 import sys
-import os
 
 
 def main():
